@@ -1,0 +1,65 @@
+# =============================================================================
+# VerborgeneSchicht Publisher — docker-compose
+#
+# Brings up the app plus an optional MySQL 8 database for local/self-hosted
+# deployment. The compose file is ready for a common path: TLS termination at
+# the edge (Caddy/Traefik/Nginx see the companion configs in ./deploy),
+# in-process scheduler enabled, secrets via the host environment or a .env
+# file that is NOT committed.
+#
+# Local quick start:
+#   cp .env.example .env          # fill every value
+#   docker compose up --build -d
+#   curl -s localhost:3000/api/health
+# =============================================================================
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: verborgene-schicht-publisher:latest
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # Required for self-hosted scheduling.
+      ENABLE_INPROCESS_SCHEDULER: "true"
+      NODE_ENV: production
+    depends_on:
+      mysql:
+        condition: service_healthy
+    ports:
+      # Optionally publish the HTTP port directly; when a reverse proxy is used
+      # you can omit the mapping and attach the app to the proxy network instead.
+      - "3000:3000"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:3000/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 60s
+
+  # Optional. Point `DATABASE_URL` at an external MySQL/TiDB instead and remove
+  # this service if you do not want a containerized database.
+  mysql:
+    image: mysql:8.0
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-verborgene_schicht}
+      MYSQL_USER: ${MYSQL_USER:-publisher}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me-publisher}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-p${MYSQL_ROOT_PASSWORD:-change-me-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+
+volumes:
+  mysql-data:
+    driver: local

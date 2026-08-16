@@ -1,0 +1,60 @@
+# ============================================================
+# VerborgeneSchicht Publisher — Cloudflare Worker config
+#
+# Deploy target for the Workers/D1 port. The Docker/Express path
+# is unchanged and lives at the repo root.
+#
+# Secrets (set via `wrangler secret put <NAME>` — do NOT commit):
+#   JWT_SECRET, ADMIN_PASSWORD_HASH, TELEGRAM_BOT_TOKEN,
+#   TELEGRAM_WEBHOOK_SECRET, LLM_API_KEY
+#
+# Plain vars (non-secret, may live here):
+#   VITE_APP_ID  (also inlined into the client bundle at Vite build time)
+# ============================================================
+
+name = "verborgene-schicht-publisher"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+compatibility_flags = ["nodejs_compat"]
+
+# --- Persistent SQLite via Cloudflare D1 ------------------------
+[[d1_databases]]
+binding = "DB"
+database_name = "verborgene-schicht-publisher"
+database_id = "aff6b931-bbd1-4008-a2a0-d360076d97a8"
+# Directory of auto-generated SQLite migrations created by drizzle-kit
+migrations_dir = "drizzle-d1"
+
+# --- Cron Triggers (UTC) -----------------------------------------
+# The four scheduled phases handled directly by the Worker.
+[triggers]
+crons = [
+  "30 2-23/3 * * *",     # draft            : generate review draft 30m before publish
+  "0 */3 * * *",         # publish          : publish reviewed draft on 3h cadence
+  "0 8 * * 1",           # weekly-report    : weekly performance report (Mon 08:00)
+  "0 10 * * *",          # engagement-alert : evaluate low-engagement alerts (daily 10:00)
+]
+
+# --- Static assets (the Vite-built dashboard) --------------------
+# Build the client with `vite build` (outDir = client -> ../dist/public)
+# before deploying so the dashboard ships with the Worker. Vite writes to the
+# repo root `dist/public` (also consumed by the Docker/Express path), so the
+# assets dir here points up one level to reuse that same build output.
+[assets]
+directory = "../dist/public"
+not_found_handling = "single-page-application"
+
+# --- Plain vars (non-secret) --------------------------------------
+[vars]
+VITE_APP_ID = "verborgene-schicht-publisher"
+ADMIN_USER_ID = "local-admin"
+ADMIN_USERNAME = "admin"
+ADMIN_DISPLAY_NAME = "Administrator"
+LLM_BASE_URL = "https://api.openai.com"
+LLM_MODEL = "gpt-4o-mini"
+
+# --- Local development variables (wrangler dev / miniflare) -------
+# Add development-only values here or in .dev.vars. Production secrets
+# belong in `wrangler secret put`.
+# [env.dev]
+# vars = { VITE_APP_ID = "dev-app-id" }

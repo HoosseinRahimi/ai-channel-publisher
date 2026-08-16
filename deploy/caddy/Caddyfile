@@ -1,0 +1,34 @@
+# =============================================================================
+# VerborgeneSchicht Publisher — Caddy 2 reverse proxy
+# Automatic HTTPS via Let's Encrypt; requires the domain to point at this host
+# and ports 80/443 open. Copy to /etc/caddy/Caddyfile (or run via a systemd
+# unit bundled with the Caddy binary).
+#
+#   sudo cp deploy/caddy/Caddyfile /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+# =============================================================================
+
+publisher.example.com {                 # <-- your domain
+    reverse_proxy 127.0.0.1:3000
+
+    encode gzip
+
+    # WebSocket not used by this app, but keep the upgrade headers for forward
+    # compatibility with HMR during local development.
+    header_up X-Forwarded-Proto {scheme}
+
+    # Large uploads (file storage proxy) and long-POST tolerance.
+    request_body {
+        max_size 50MB
+    }
+
+    # Health endpoint for uptime monitoring.
+    handle_path /api/health {
+        reverse_proxy 127.0.0.1:3000
+    }
+
+    log {
+        output stdout
+        format console
+    }
+}

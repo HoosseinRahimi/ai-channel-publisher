@@ -1,0 +1,23 @@
+# Local development variables for `wrangler dev` (copy to `.dev.vars`).
+# NEVER commit real secrets here — use `wrangler secret put <NAME>` for prod.
+#
+# Production secrets (set in the deployed Worker via `wrangler secret put`):
+#   JWT_SECRET, ADMIN_PASSWORD_HASH, TELEGRAM_BOT_TOKEN,
+#   TELEGRAM_WEBHOOK_SECRET, LLM_API_KEY
+#
+# Plain (non-secret) public values:
+#   VITE_APP_ID = "webdev.publisher-demo"
+#
+# For local-only testing set dev values here; the Worker reads these through the
+# `process.env` facade (see `_core/workerEnv.ts` + `_core/env.ts`).
+#
+# Example (replace with your own dev values — never real credentials):
+# VITE_APP_ID = "webdev.publisher-demo"
+# JWT_SECRET = "dev-only-secret-change-me"
+# ADMIN_USER_ID = "local-admin"
+# ADMIN_USERNAME = "admin"
+# ADMIN_DISPLAY_NAME = "Administrator"
+# ADMIN_PASSWORD_HASH = "pbkdf2$..."
+# LLM_BASE_URL = "https://api.openai.com"
+# LLM_API_KEY = "dev-only-key"
+# LLM_MODEL = "gpt-4o-mini"

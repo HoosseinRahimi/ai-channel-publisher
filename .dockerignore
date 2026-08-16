@@ -1,0 +1,33 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Build outputs
+dist
+build
+
+# Environment & secrets — never build secrets into an image
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# VCS
+.git
+.gitignore
+
+# Tests / tooling
+coverage
+*.tsbuildinfo
+
+# Docs that add image weight
+*.md
+SHA256SUMS.txt
+
+# Local OS / editor junk
+.DS_Store
+Thumbs.db
+.idea
+.vscode
+*.swp
