@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import EngagementIntelligence from "@/components/EngagementIntelligence";
+import { PageHeader } from "@/components/PageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -86,7 +87,7 @@ function Metric({
             </p>
             <p className="mt-1.5 text-xs leading-5 text-slate-500">{detail}</p>
           </div>
-          <div className={`rounded-2xl p-3 ${tones[tone]}`}>
+          <div className={`rounded-lg p-3 ${tones[tone]}`}>
             <Icon className="h-5 w-5" />
           </div>
         </div>
@@ -156,27 +157,17 @@ export default function PublisherAnalytics() {
   return (
     <DashboardLayout>
       <div dir={dir} className="mx-auto max-w-7xl space-y-6 pb-10">
-        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(120deg,#0f172a_0%,#1e1b4b_55%,#312e81_100%)] px-6 py-8 text-white shadow-[0_24px_64px_rgba(30,27,75,0.22)] sm:px-9">
-          <div className="absolute -left-20 -top-20 h-64 w-64 rounded-full bg-violet-500/25 blur-3xl" />
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:28px_28px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
-          <div className="relative flex flex-col gap-5 sm:flex-row sm:items-end sm:justify-between">
-            <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-violet-300/15 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-100">
-                <TrendingUp className="h-4 w-4" />
-                {t("analytics.heroKicker")}
-              </div>
-              <h1 className="text-3xl font-bold tracking-[-0.035em]">
-                {t("analytics.heroTitle")}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-                {t("analytics.heroDesc")}
-              </p>
-            </div>
-            <Badge className="w-fit rounded-full border border-white/10 bg-white/10 px-3 py-1.5 text-slate-100 hover:bg-white/10">
+        <PageHeader
+          eyebrow={t("analytics.heroKicker")}
+          title={t("analytics.heroTitle")}
+          description={t("analytics.heroDesc")}
+          icon={TrendingUp}
+          aside={
+            <Badge variant="secondary" className="w-fit font-medium">
               {t("analytics.latestPublication", { time: latest })}
             </Badge>
-          </div>
-        </section>
+          }
+        />
 
         {analytics.isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

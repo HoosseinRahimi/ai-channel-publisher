@@ -1,5 +1,6 @@
 import DashboardLayout from "@/components/DashboardLayout";
 import InstructionStudio from "@/components/InstructionStudio";
+import { PageHeader } from "@/components/PageHeader";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
@@ -105,10 +107,14 @@ function GeneralSettingsCard() {
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-800">
+            <label
+              htmlFor="channel-handle"
+              className="mb-2 block text-sm font-medium text-slate-800"
+            >
               {t("settings.channelHandleLabel")}
             </label>
             <Input
+              id="channel-handle"
               dir="ltr"
               value={form.channelHandle}
               onChange={event =>
@@ -125,10 +131,14 @@ function GeneralSettingsCard() {
             </p>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-800">
+            <label
+              htmlFor="app-name"
+              className="mb-2 block text-sm font-medium text-slate-800"
+            >
               {t("settings.appNameLabel")}
             </label>
             <Input
+              id="app-name"
               value={form.appName}
               onChange={event =>
                 setForm(current =>
@@ -142,29 +152,36 @@ function GeneralSettingsCard() {
             />
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-800">
+            <label
+              htmlFor="post-language"
+              className="mb-2 block text-sm font-medium text-slate-800"
+            >
               {t("settings.postLanguageLabel")}
             </label>
-            <select
+            <NativeSelect
+              id="post-language"
               value={form.postLanguage}
               onChange={event => updateLanguage(event.target.value)}
-              className="h-10 w-full rounded-md border border-slate-200 bg-white px-3 text-sm"
             >
               {POST_LANGUAGE_OPTIONS.map(option => (
                 <option key={option.value} value={option.value}>
                   {t(option.labelKey)}
                 </option>
               ))}
-            </select>
+            </NativeSelect>
             <p className="mt-1.5 text-xs leading-5 text-slate-500">
               {t("settings.postLanguageHint")}
             </p>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-800">
+            <label
+              htmlFor="post-signature"
+              className="mb-2 block text-sm font-medium text-slate-800"
+            >
               {t("settings.signatureLabel")}
             </label>
             <Input
+              id="post-signature"
               dir="ltr"
               value={form.postSignature}
               onChange={event =>
@@ -274,10 +291,14 @@ function LlmSettingsCard() {
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-800">
+            <label
+              htmlFor="llm-base-url"
+              className="mb-2 block text-sm font-medium text-slate-800"
+            >
               {t("settings.baseUrlLabel")}
             </label>
             <Input
+              id="llm-base-url"
               dir="ltr"
               value={baseUrl}
               onChange={event => setBaseUrl(event.target.value)}
@@ -288,15 +309,19 @@ function LlmSettingsCard() {
             </p>
           </div>
           <div>
-            <label className="mb-2 block text-sm font-medium text-slate-800">
+            <label
+              htmlFor="llm-model"
+              className="mb-2 block text-sm font-medium text-slate-800"
+            >
               {t("settings.modelLabel")}
             </label>
             <div className="flex gap-2">
               {models ? (
-                <select
+                <NativeSelect
+                  id="llm-model"
                   value={model}
                   onChange={event => setModel(event.target.value)}
-                  className="h-10 flex-1 rounded-md border border-slate-200 bg-white px-3 text-sm"
+                  className="flex-1"
                   dir="ltr"
                 >
                   <option value="" disabled>
@@ -307,9 +332,10 @@ function LlmSettingsCard() {
                       {availableModel}
                     </option>
                   ))}
-                </select>
+                </NativeSelect>
               ) : (
                 <Input
+                  id="llm-model"
                   dir="ltr"
                   value={model}
                   onChange={event => setModel(event.target.value)}
@@ -336,10 +362,14 @@ function LlmSettingsCard() {
           </div>
         </div>
         <div>
-          <label className="mb-2 block text-sm font-medium text-slate-800">
+          <label
+            htmlFor="llm-api-key"
+            className="mb-2 block text-sm font-medium text-slate-800"
+          >
             {t("settings.apiKeyLabel")}
           </label>
           <Input
+            id="llm-api-key"
             dir="ltr"
             type="password"
             value={apiKey}
@@ -489,25 +519,12 @@ export default function PublisherSettings() {
   return (
     <DashboardLayout>
       <div dir={dir} className="mx-auto max-w-6xl space-y-6 pb-10">
-        <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(120deg,#0f172a_0%,#1e1b4b_55%,#312e81_100%)] px-6 py-8 text-white shadow-[0_24px_64px_rgba(30,27,75,0.22)] sm:px-9">
-          <div className="absolute -left-20 -top-20 h-60 w-60 rounded-full bg-violet-500/25 blur-3xl" />
-          <div className="relative flex items-start gap-4">
-            <div className="rounded-2xl border border-white/10 bg-white/10 p-3 text-violet-100">
-              <ShieldCheck className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-200">
-                {t("settings.heroKicker")}
-              </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-[-0.035em]">
-                {t("settings.heroTitle")}
-              </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-                {t("settings.heroDesc")}
-              </p>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow={t("settings.heroKicker")}
+          title={t("settings.heroTitle")}
+          description={t("settings.heroDesc")}
+          icon={ShieldCheck}
+        />
 
         <Card className="border-slate-200/80 shadow-sm">
           <CardHeader>
@@ -551,7 +568,7 @@ export default function PublisherSettings() {
         <InstructionStudio />
 
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card className="border-violet-200 bg-violet-50/40 shadow-sm">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MessageSquareText className="h-5 w-5 text-violet-600" />
@@ -561,10 +578,14 @@ export default function PublisherSettings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-800">
+                <label
+                  htmlFor="editorial-guidance"
+                  className="mb-2 block text-sm font-medium text-slate-800"
+                >
                   {t("settings.standingGuidanceLabel")}
                 </label>
                 <Textarea
+                  id="editorial-guidance"
                   value={editorialGuidance}
                   onChange={event => setEditorialGuidance(event.target.value)}
                   maxLength={2000}
@@ -573,10 +594,14 @@ export default function PublisherSettings() {
                 />
               </div>
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-800">
+                <label
+                  htmlFor="next-post-feedback"
+                  className="mb-2 block text-sm font-medium text-slate-800"
+                >
                   {t("settings.nextPostFeedbackLabel")}
                 </label>
                 <Textarea
+                  id="next-post-feedback"
                   value={nextPostFeedback}
                   onChange={event => setNextPostFeedback(event.target.value)}
                   maxLength={2000}
@@ -599,7 +624,7 @@ export default function PublisherSettings() {
               </Button>
             </CardContent>
           </Card>
-          <Card className="border-indigo-100 bg-indigo-50/50 shadow-sm">
+          <Card className="bg-slate-50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <Languages className="h-5 w-5 text-violet-600" />
@@ -624,7 +649,7 @@ export default function PublisherSettings() {
             <CardDescription>{t("settings.sourcesDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="rounded-2xl border border-dashed border-violet-200 bg-violet-50/40 p-5">
+            <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h2 className="font-semibold text-slate-900">
                   {editingSourceId
@@ -640,6 +665,7 @@ export default function PublisherSettings() {
               </div>
               <div className="grid gap-3 md:grid-cols-2">
                 <Input
+                  aria-label={t("settings.sourceNamePlaceholder")}
                   value={sourceForm.name}
                   onChange={event =>
                     setSourceForm(current => ({
@@ -650,6 +676,7 @@ export default function PublisherSettings() {
                   placeholder={t("settings.sourceNamePlaceholder")}
                 />
                 <Input
+                  aria-label={t("settings.homepagePlaceholder")}
                   dir="ltr"
                   value={sourceForm.homepage}
                   onChange={event =>
@@ -661,6 +688,7 @@ export default function PublisherSettings() {
                   placeholder={t("settings.homepagePlaceholder")}
                 />
                 <Input
+                  aria-label={t("settings.feedPlaceholder")}
                   dir="ltr"
                   value={sourceForm.feedUrl}
                   onChange={event =>
@@ -671,7 +699,8 @@ export default function PublisherSettings() {
                   }
                   placeholder={t("settings.feedPlaceholder")}
                 />
-                <select
+                <NativeSelect
+                  aria-label={t("settings.kindPrimary")}
                   value={sourceForm.sourceKind}
                   onChange={event =>
                     setSourceForm(current => ({
@@ -681,13 +710,12 @@ export default function PublisherSettings() {
                         | "third_party",
                     }))
                   }
-                  className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
                 >
                   <option value="primary">{t("settings.kindPrimary")}</option>
                   <option value="third_party">
                     {t("settings.kindThirdParty")}
                   </option>
-                </select>
+                </NativeSelect>
               </div>
               <Button
                 className="mt-4"
@@ -746,11 +774,16 @@ export default function PublisherSettings() {
                     </div>
                   </div>
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    <a href={source.homepage} target="_blank" rel="noreferrer">
-                      <Button variant="ghost" size="sm">
+                    <Button asChild variant="ghost" size="sm">
+                      <a
+                        href={source.homepage}
+                        target="_blank"
+                        rel="noreferrer"
+                        aria-label={`${t("posts.openSource")}: ${source.name}`}
+                      >
                         <ExternalLink className="h-4 w-4" />
-                      </Button>
-                    </a>
+                      </a>
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

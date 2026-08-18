@@ -76,7 +76,7 @@
     scroll-behavior: smooth;
   }
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-slate-50 text-foreground antialiased;
     min-width: 320px;
     font-family:
       Inter,
@@ -86,18 +86,6 @@
       BlinkMacSystemFont,
       "Segoe UI",
       sans-serif;
-    background-image:
-      radial-gradient(
-        circle at 15% 0%,
-        oklch(0.92 0.06 292 / 0.38),
-        transparent 26rem
-      ),
-      radial-gradient(
-        circle at 88% 12%,
-        oklch(0.94 0.055 220 / 0.28),
-        transparent 24rem
-      );
-    background-attachment: fixed;
   }
   ::selection {
     @apply bg-violet-200 text-violet-950;
@@ -110,18 +98,9 @@
   a[href] {
     @apply cursor-pointer;
   }
-  select {
-    @apply outline-none transition-[border-color,box-shadow];
-  }
-  select:focus-visible {
-    @apply border-ring ring-4 ring-ring/20;
-  }
 }
 
 @layer components {
-  [data-slot="card"]:hover {
-    border-color: oklch(0.86 0.025 292);
-  }
   [data-slot="card-header"] {
     @apply px-5 sm:px-6;
   }
@@ -134,12 +113,8 @@
   button,
   a {
     transition:
-      transform 160ms cubic-bezier(0.23, 1, 0.32, 1),
       box-shadow 160ms cubic-bezier(0.23, 1, 0.32, 1),
       background-color 160ms ease,
       border-color 160ms ease;
-  }
-  button:active {
-    transform: scale(0.98);
   }
 }

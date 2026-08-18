@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { PageHeader } from "@/components/PageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { NativeSelect } from "@/components/ui/native-select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
@@ -132,25 +134,12 @@ export default function PublisherPosts() {
   return (
     <DashboardLayout>
       <div dir={dir} className="mx-auto max-w-6xl space-y-6 pb-10">
-        <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(120deg,#0f172a_0%,#1e1b4b_55%,#312e81_100%)] px-6 py-8 text-white shadow-[0_24px_64px_rgba(30,27,75,0.22)] sm:px-9">
-          <div className="absolute -left-20 -top-20 h-60 w-60 rounded-full bg-violet-500/25 blur-3xl" />
-          <div className="relative flex items-start gap-4">
-            <div className="rounded-2xl border border-white/10 bg-violet-400/15 p-3 text-violet-100">
-              <FileText className="h-6 w-6" />
-            </div>
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-violet-200">
-                {t("posts.heroKicker")}
-              </p>
-              <h1 className="mt-2 text-3xl font-bold tracking-[-0.035em]">
-                {t("posts.heroTitle")}
-              </h1>
-              <p className="mt-3 max-w-2xl text-sm leading-7 text-slate-300">
-                {t("posts.heroDesc")}
-              </p>
-            </div>
-          </div>
-        </div>
+        <PageHeader
+          eyebrow={t("posts.heroKicker")}
+          title={t("posts.heroTitle")}
+          description={t("posts.heroDesc")}
+          icon={FileText}
+        />
         <Card className="border-violet-200 bg-violet-50/40 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -200,6 +189,7 @@ export default function PublisherPosts() {
                     </span>
                   </div>
                   <Textarea
+                    aria-label={`${t("posts.pendingTitle")} — ${post.sourceName}`}
                     value={value}
                     onChange={event =>
                       setEditing(current => ({
@@ -279,10 +269,10 @@ export default function PublisherPosts() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-3 md:grid-cols-3">
-              <select
+              <NativeSelect
+                aria-label={t("posts.allSources")}
                 value={sourceName}
                 onChange={event => setSourceName(event.target.value)}
-                className="h-10 rounded-md border border-slate-200 bg-white px-3 text-sm"
               >
                 <option value="all">{t("posts.allSources")}</option>
                 {sources.map(source => (
@@ -290,13 +280,15 @@ export default function PublisherPosts() {
                     {source.name}
                   </option>
                 ))}
-              </select>
+              </NativeSelect>
               <Input
+                aria-label={t("sourcePerf.fromLabel")}
                 type="date"
                 value={from}
                 onChange={event => setFrom(event.target.value)}
               />
               <Input
+                aria-label={t("sourcePerf.toLabel")}
                 type="date"
                 value={to}
                 onChange={event => setTo(event.target.value)}
@@ -348,7 +340,7 @@ export default function PublisherPosts() {
                     const Icon = config.icon;
                     return (
                       <article
-                        className="rounded-2xl border border-slate-200 bg-white p-5 transition-shadow hover:shadow-md"
+                        className="rounded-xl border border-slate-200 bg-white p-5"
                         key={post.id}
                       >
                         <div className="flex flex-wrap items-center justify-between gap-3">

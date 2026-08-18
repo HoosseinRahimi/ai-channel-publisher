@@ -58,7 +58,10 @@ export default function DashboardLayout({
     <SidebarProvider
       style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
     >
-      <DashboardLayoutContent setSidebarWidth={setSidebarWidth}>
+      <DashboardLayoutContent
+        sidebarWidth={sidebarWidth}
+        setSidebarWidth={setSidebarWidth}
+      >
         {children}
       </DashboardLayoutContent>
     </SidebarProvider>
@@ -83,12 +86,10 @@ function LocalLoginCard() {
   };
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden p-5 sm:p-8">
-      <div className="pointer-events-none absolute inset-0 bg-[linear-gradient(to_right,#8b5cf60a_1px,transparent_1px),linear-gradient(to_bottom,#8b5cf60a_1px,transparent_1px)] bg-[size:32px_32px]" />
-      <div className="pointer-events-none absolute left-[8%] top-[12%] h-72 w-72 rounded-full bg-violet-300/30 blur-3xl" />
-      <div className="relative grid w-full max-w-4xl overflow-hidden rounded-[2rem] border border-white/70 bg-white/90 shadow-[0_30px_90px_rgba(76,29,149,0.16)] backdrop-blur-xl lg:grid-cols-[1.05fr_0.95fr]">
+    <div className="flex min-h-screen items-center justify-center bg-slate-100 p-5 sm:p-8">
+      <div className="grid w-full max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl shadow-slate-300/40 lg:grid-cols-[1.05fr_0.95fr]">
         <div className="hidden bg-slate-950 p-10 text-white lg:flex lg:flex-col lg:justify-between">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 shadow-lg shadow-violet-500/30">
+          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-violet-600">
             <Sparkles className="h-5 w-5" />
           </div>
           <div>
@@ -99,11 +100,11 @@ function LocalLoginCard() {
               {t("login.description")}
             </p>
           </div>
-          <div className="h-px bg-gradient-to-r from-violet-400/50 to-transparent" />
+          <div className="h-px bg-slate-700" />
         </div>
         <form onSubmit={submit} className="p-7 sm:p-10" dir={dir}>
           <div className="mb-9 flex items-center justify-between">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 to-indigo-700 text-sm font-black text-white shadow-lg shadow-violet-500/25 lg:hidden">
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-violet-600 text-sm font-black text-white lg:hidden">
               AI
             </div>
             <LanguageSwitcher compact />
@@ -193,9 +194,11 @@ function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
 
 function DashboardLayoutContent({
   children,
+  sidebarWidth,
   setSidebarWidth,
 }: {
   children: React.ReactNode;
+  sidebarWidth: number;
   setSidebarWidth: (value: number) => void;
 }) {
   const { user, logout } = useAuth();
@@ -221,6 +224,7 @@ function DashboardLayoutContent({
   ];
   const activeItem =
     menuItems.find(item => item.path === location) ?? menuItems[0];
+  const automationEnabled = Boolean(dashboard.data?.settings?.isEnabled);
   useEffect(() => {
     const move = (event: MouseEvent) => {
       if (!isResizing) return;
@@ -238,17 +242,31 @@ function DashboardLayoutContent({
       document.removeEventListener("mouseup", up);
     };
   }, [isResizing, setSidebarWidth, isRtl]);
+  const resizeWithKeyboard = (
+    event: React.KeyboardEvent<HTMLButtonElement>
+  ) => {
+    if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+    event.preventDefault();
+    const visualDirection = event.key === "ArrowRight" ? 1 : -1;
+    const logicalDirection = isRtl ? -visualDirection : visualDirection;
+    setSidebarWidth(
+      Math.min(
+        MAX_WIDTH,
+        Math.max(MIN_WIDTH, sidebarWidth + logicalDirection * 12)
+      )
+    );
+  };
   return (
     <>
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           side={isRtl ? "right" : "left"}
           collapsible="icon"
-          className={`${isRtl ? "border-l border-r-0" : "border-r border-l-0"} border-slate-200/70 bg-white/90 backdrop-blur-xl`}
+          className={`${isRtl ? "border-l border-r-0" : "border-r border-l-0"} border-slate-200 bg-white`}
         >
           <SidebarHeader className="h-24 justify-center px-3">
             <div className="flex w-full items-center gap-3">
-              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-600 via-purple-600 to-indigo-700 text-sm font-black text-white shadow-lg shadow-violet-500/25 ring-1 ring-white/20">
+              <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-violet-600 text-sm font-black text-white shadow-sm">
                 {brandInitials}
               </div>
               <div className="min-w-0 group-data-[collapsible=icon]:hidden">
@@ -274,7 +292,7 @@ function DashboardLayoutContent({
                     isActive={location === item.path}
                     onClick={() => setLocation(item.path)}
                     tooltip={item.label}
-                    className={`relative h-12 rounded-2xl px-3 font-medium transition-all data-[active=true]:bg-violet-50 data-[active=true]:text-violet-800 data-[active=true]:shadow-[inset_0_0_0_1px_rgba(139,92,246,0.10)] ${isRtl ? "text-right" : "text-left"}`}
+                    className={`relative h-11 rounded-lg px-3 font-medium transition-colors data-[active=true]:bg-violet-50 data-[active=true]:text-violet-800 ${isRtl ? "text-right" : "text-left"}`}
                   >
                     <item.icon className="h-[18px] w-[18px]" />
                     <span>{item.label}</span>
@@ -289,16 +307,16 @@ function DashboardLayoutContent({
             </SidebarMenu>
           </SidebarContent>
           <SidebarFooter className="p-3">
-            <div className="rounded-2xl border border-slate-200/70 bg-slate-50/70 p-1">
+            <div className="border-t border-slate-200 pt-2">
               <LanguageSwitcher />
             </div>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className={`mt-2 flex w-full items-center gap-3 rounded-2xl p-2.5 transition-colors hover:bg-violet-50 ${isRtl ? "text-right" : "text-left"}`}
+                  className={`mt-2 flex w-full items-center gap-3 rounded-lg p-2.5 transition-colors hover:bg-slate-100 ${isRtl ? "text-right" : "text-left"}`}
                 >
-                  <Avatar className="h-9 w-9 ring-2 ring-white shadow-sm">
-                    <AvatarFallback className="bg-gradient-to-br from-violet-100 to-indigo-100 text-xs font-bold text-violet-700">
+                  <Avatar className="h-9 w-9">
+                    <AvatarFallback className="bg-violet-100 text-xs font-bold text-violet-700">
                       {user?.name?.charAt(0).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
@@ -323,14 +341,20 @@ function DashboardLayoutContent({
         </Sidebar>
         <button
           aria-label="Resize sidebar"
+          aria-orientation="vertical"
+          aria-valuemax={MAX_WIDTH}
+          aria-valuemin={MIN_WIDTH}
+          aria-valuenow={sidebarWidth}
+          role="separator"
           className={`absolute top-0 z-20 h-full w-1 cursor-col-resize transition-colors hover:bg-violet-300/70 ${isRtl ? "left-0" : "right-0"}`}
           onMouseDown={() => setIsResizing(true)}
+          onKeyDown={resizeWithKeyboard}
         />
       </div>
       <SidebarInset
         className={`min-w-0 bg-transparent ${isRtl ? "lg:mr-[var(--sidebar-width)]" : "lg:ml-[var(--sidebar-width)]"}`}
       >
-        <header className="sticky top-0 z-30 border-b border-slate-200/60 bg-white/75 backdrop-blur-xl">
+        <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-7">
             <div className="flex min-w-0 items-center gap-3">
               <SidebarTrigger className="h-9 w-9 rounded-xl border border-slate-200 bg-white shadow-sm lg:hidden" />
@@ -343,12 +367,16 @@ function DashboardLayoutContent({
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-2 rounded-full border border-emerald-200/70 bg-emerald-50/80 px-3 py-1.5 text-xs font-semibold text-emerald-700">
-              <span className="relative flex h-2 w-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-60" />
-                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
-              </span>
-              {t("home.statReady")}
+            <div
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${automationEnabled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}
+            >
+              <span
+                aria-hidden="true"
+                className={`size-2 rounded-full ${automationEnabled ? "bg-emerald-500" : "bg-slate-400"}`}
+              />
+              {automationEnabled
+                ? t("home.automationOn")
+                : t("home.automationOff")}
             </div>
           </div>
         </header>

@@ -1,4 +1,5 @@
 import DashboardLayout from "@/components/DashboardLayout";
+import { PageHeader } from "@/components/PageHeader";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -69,7 +70,7 @@ function StatCard({
             </p>
             <p className="mt-1.5 text-xs leading-5 text-slate-500">{detail}</p>
           </div>
-          <div className={`rounded-2xl p-3 ${color}`}>
+          <div className={`rounded-lg p-3 ${color}`}>
             <Icon className="h-5 w-5" />
           </div>
         </div>
@@ -128,43 +129,38 @@ export default function Home() {
   return (
     <DashboardLayout>
       <div dir={dir} className="mx-auto max-w-7xl space-y-6 pb-10">
-        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-[linear-gradient(120deg,#0f172a_0%,#1e1b4b_55%,#312e81_100%)] px-6 py-8 text-white shadow-[0_24px_64px_rgba(30,27,75,0.22)] sm:px-9 sm:py-10">
-          <div className="absolute -left-14 -top-16 h-64 w-64 rounded-full bg-violet-500/25 blur-3xl" />
-          <div className="absolute -bottom-20 right-1/3 h-56 w-56 rounded-full bg-cyan-400/15 blur-3xl" />
-          <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff08_1px,transparent_1px),linear-gradient(to_bottom,#ffffff08_1px,transparent_1px)] bg-[size:28px_28px] [mask-image:linear-gradient(to_bottom,black,transparent)]" />
-          <div className="relative flex flex-col gap-7 lg:flex-row lg:items-end lg:justify-between">
-            <div className="max-w-2xl">
-              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-violet-300/15 bg-violet-400/10 px-3 py-1.5 text-xs font-semibold text-violet-100 backdrop-blur">
-                <Sparkles className="h-4 w-4" />
-                {t("home.heroKicker")}
-              </div>
-              <h1 className="text-3xl font-bold tracking-[-0.035em] sm:text-4xl lg:text-[2.6rem]">
-                {t("home.heroTitle")}
-              </h1>
-              <p className="mt-4 text-sm leading-7 text-slate-300 sm:text-base">
-                {t("home.heroDescription", {
-                  language: outputLanguageName,
-                  channel: channelHandle,
-                })}
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
+        <PageHeader
+          eyebrow={t("home.heroKicker")}
+          title={t("home.heroTitle")}
+          description={t("home.heroDescription", {
+            language: outputLanguageName,
+            channel: channelHandle,
+          })}
+          icon={Sparkles}
+          aside={
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
               <Badge
-                className={`rounded-full px-3 py-1.5 ${settings?.isEnabled ? "bg-emerald-400 text-emerald-950" : "bg-amber-300 text-amber-950"}`}
+                variant="outline"
+                className={
+                  settings?.isEnabled
+                    ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                    : "border-amber-200 bg-amber-50 text-amber-800"
+                }
               >
+                <span
+                  aria-hidden="true"
+                  className={`size-1.5 rounded-full ${settings?.isEnabled ? "bg-emerald-500" : "bg-amber-500"}`}
+                />
                 {settings?.isEnabled
                   ? t("home.automationOn")
                   : t("home.automationOff")}
               </Badge>
-              <Badge
-                variant="outline"
-                className="rounded-full border-white/15 bg-white/5 px-3 py-1.5 text-slate-200 backdrop-blur"
-              >
+              <Badge variant="secondary">
                 {t("common.model")}: {data?.llm?.model ?? "—"}
               </Badge>
             </div>
-          </div>
-        </section>
+          }
+        />
 
         {dashboard.isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -303,9 +299,9 @@ export default function Home() {
                     </AlertDialogContent>
                   </AlertDialog>
                 )}
-                <a href="/posts" className="inline-flex">
-                  <Button variant="ghost">{t("home.reviewDrafts")}</Button>
-                </a>
+                <Button asChild variant="ghost">
+                  <a href="/posts">{t("home.reviewDrafts")}</a>
+                </Button>
               </div>
             </CardContent>
           </Card>
