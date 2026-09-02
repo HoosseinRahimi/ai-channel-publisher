@@ -1,5 +1,5 @@
 # =============================================================================
-# VerborgeneSchicht Publisher — docker-compose
+# AI Channel Publisher — docker-compose
 #
 # Brings up the app plus an optional MySQL 8 database for local/self-hosted
 # deployment. The compose file is ready for a common path: TLS termination at
@@ -18,7 +18,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: verborgene-schicht-publisher:latest
+    image: ai-channel-publisher:latest
     restart: unless-stopped
     env_file:
       - .env
@@ -47,7 +47,7 @@ services:
     restart: unless-stopped
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-change-me-root}
-      MYSQL_DATABASE: ${MYSQL_DATABASE:-verborgene_schicht}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-ai_channel_publisher}
       MYSQL_USER: ${MYSQL_USER:-publisher}
       MYSQL_PASSWORD: ${MYSQL_PASSWORD:-change-me-publisher}
     command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_unicode_ci"]

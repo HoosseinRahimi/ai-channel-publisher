@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDailySourcePerformanceTrend, buildEngagementAnalytics, buildPublisherAnalytics, buildRunKey, buildSourceEngagementComparison, buildSourceLowEngagementCandidates, buildTelegramRecipientCode, buildWeeklyReportDeliveryUpdate, buildWeeklyReportMarkdown, calculateEngagementRateBps, canAutoPublishDraft, canDeliverWeeklyReport, DRAFT_CRON, getCompletedWeekRange, getSourceAlertWeekRange, hashText, isLowEngagement, isPublishedHistoryStatus, isReviewableDraftStatus, isTelegramEngagementConfigured, isValidTelegramRecipientCode, isValidTelegramTokenConfigured, isValidTelegramWebhookSecret, matchesDuplicate, normalizeAnalyticsPresetName, normalizeEditedDraftContent, normalizeEditorialGuidance, normalizeEngagementThresholdBps, normalizeSourcePerformanceFilters, normalizeTopic, outputMatchesLanguage, PERSIAN_EDITORIAL_SYSTEM_PROMPT, PUBLISH_CRON, renderChannelPost, selectLatestWeeklyReport, summarizeTelegramReactions, telegramChannelSetupError, titleFromContent, validatePublisherSource, WEEKLY_REPORT_CRON } from "./publisher";
+import { buildDailySourcePerformanceTrend, buildEngagementAnalytics, buildPublisherAnalytics, buildRunKey, buildSourceEngagementComparison, buildSourceLowEngagementCandidates, buildTelegramRecipientCode, buildWeeklyReportDeliveryUpdate, buildWeeklyReportMarkdown, calculateEngagementRateBps, canAutoPublishDraft, canDeliverWeeklyReport, decodeXmlEntities, DRAFT_CRON, extractCandidates, getCompletedWeekRange, getSourceAlertWeekRange, hashText, isLowEngagement, isPublishedHistoryStatus, isReviewableDraftStatus, isTelegramEngagementConfigured, isValidTelegramRecipientCode, isValidTelegramTokenConfigured, isValidTelegramWebhookSecret, matchesDuplicate, normalizeAnalyticsPresetName, normalizeEditedDraftContent, normalizeEditorialGuidance, normalizeEngagementThresholdBps, normalizeSourcePerformanceFilters, normalizeTopic, outputMatchesLanguage, PERSIAN_EDITORIAL_SYSTEM_PROMPT, PUBLISH_CRON, renderChannelPost, selectLatestWeeklyReport, stripMarkup, summarizeTelegramReactions, telegramChannelSetupError, titleFromContent, validatePublisherSource, WEEKLY_REPORT_CRON } from "./publisher";
 
 describe("publisher utilities", () => {
   it("normalizes a topic deterministically for duplicate checks", () => {
@@ -271,5 +271,57 @@ describe("publisher utilities", () => {
     const deliveredAt = new Date("2026-08-14T12:00:00.000Z");
     expect(buildWeeklyReportDeliveryUpdate(undefined, deliveredAt)).toEqual({ deliveredToOwnerAt: deliveredAt, deliveryError: null });
     expect(buildWeeklyReportDeliveryUpdate(new Error("Telegram failed"))).toEqual({ deliveryError: "Telegram failed" });
+  });
+
+  it("decodes XML and HTML entities properly in titles and markup", () => {
+    expect(decodeXmlEntities("AI &amp; Robotics &quot;Revolution&quot; &#39;26")).toBe("AI & Robotics \"Revolution\" '26");
+    expect(decodeXmlEntities("Claude&#x27;s abilities &lt;&gt;")).toBe("Claude's abilities <>");
+    expect(stripMarkup("<![CDATA[OpenAI &amp; Anthropic &lt;Agents&gt;]]>")).toBe("OpenAI & Anthropic <Agents>");
+  });
+
+  it("extracts candidates from RSS and Atom feeds including image URLs", () => {
+    const mockSource = {
+      id: 1,
+      name: "Tech News",
+      homepage: "https://example.com",
+      feedUrl: "https://example.com/rss.xml",
+      sourceKind: "primary" as const,
+      isActive: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    const rssXml = `
+      <rss version="2.0">
+        <channel>
+          <item>
+            <title><![CDATA[New Breakthrough in Multimodal AI &amp; Agents]]></title>
+            <link>https://example.com/articles/multimodal-breakthrough</link>
+            <enclosure url="https://example.com/images/hero.jpg" type="image/jpeg" />
+          </item>
+        </channel>
+      </rss>
+    `;
+
+    const candidates = extractCandidates(mockSource, rssXml);
+    expect(candidates).toHaveLength(1);
+    expect(candidates[0].title).toBe("New Breakthrough in Multimodal AI & Agents");
+    expect(candidates[0].url).toBe("https://example.com/articles/multimodal-breakthrough");
+    expect(candidates[0].imageUrl).toBe("https://example.com/images/hero.jpg");
+
+    const atomXml = `
+      <feed xmlns="http://www.w3.org/2005/Atom">
+        <entry>
+          <title>Autonomous Systems Transforming Research</title>
+          <link rel="self" href="https://example.com/feed.xml" />
+          <link rel="alternate" href="https://example.com/articles/autonomous-research" />
+        </entry>
+      </feed>
+    `;
+
+    const atomCandidates = extractCandidates(mockSource, atomXml);
+    expect(atomCandidates).toHaveLength(1);
+    expect(atomCandidates[0].title).toBe("Autonomous Systems Transforming Research");
+    expect(atomCandidates[0].url).toBe("https://example.com/articles/autonomous-research");
   });
 });

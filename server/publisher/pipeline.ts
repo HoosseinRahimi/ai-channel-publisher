@@ -74,9 +74,11 @@ import {
 } from "./languages";
 import { resolveLlmConfig } from "./llmConfig";
 import {
+  answerTelegramCallbackQuery,
   dbUpdateEngagementWebhookEnabled,
   deliverToTelegram,
   fetchTelegramChannelAudienceSize,
+  sendDraftReviewNotificationToTelegram,
   sendTelegramMessage,
   verifyTelegramChannelAccess,
 } from "./telegram";
@@ -240,8 +242,32 @@ export async function recordTelegramReactionUpdate(update: TelegramReactionUpdat
 }
 
 export async function handleTelegramWebhookUpdate(update: TelegramWebhookUpdate) {
+  if (update.callback_query?.data) {
+    const data = update.callback_query.data;
+    const [action, idStr] = data.split(":");
+    const postId = parseInt(idStr, 10);
+    if (postId && ["publish", "hold", "discard"].includes(action)) {
+      try {
+        if (action === "publish") {
+          await publishDraft(postId);
+          await answerTelegramCallbackQuery(update.callback_query.id, "✅ Post published to channel!");
+        } else if (action === "hold") {
+          await setDraftHeld(postId, true);
+          await answerTelegramCallbackQuery(update.callback_query.id, "⏳ Post put on hold.");
+        } else if (action === "discard") {
+          await discardDraft(postId);
+          await answerTelegramCallbackQuery(update.callback_query.id, "❌ Draft discarded.");
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Action failed";
+        await answerTelegramCallbackQuery(update.callback_query.id, `⚠️ ${msg}`);
+      }
+      return { kind: "callback-query" as const, action, postId };
+    }
+  }
+
   const text = update.message?.text?.trim() ?? "";
-  const match = text.match(/^\/start\s+(VS-[A-Z0-9]+)$/i);
+  const match = text.match(/^\/start\s+((?:VS|PUB)-[A-Z0-9]+)$/i);
   const chatId = update.message?.chat?.id;
   if (match && chatId !== undefined) {
     const recipient = await connectTelegramRecipient(chatId, match[1]);
@@ -683,6 +709,43 @@ async function addArticleContext(candidate: NewsCandidate) {
   }
 }
 
+function parseGeneratedPostJson(content: string): GeneratedPost {
+  const jsonMatch = content.match(/```(?:json)?\s*([\s\S]*?)\s*```/i);
+  const cleanContent = jsonMatch ? jsonMatch[1].trim() : content.trim();
+  const firstBrace = cleanContent.indexOf("{");
+  const lastBrace = cleanContent.lastIndexOf("}");
+  const jsonString = (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace)
+    ? cleanContent.slice(firstBrace, lastBrace + 1)
+    : cleanContent;
+
+  const parsed = JSON.parse(jsonString) as Record<string, unknown>;
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error("Parsed content is not a valid JSON object.");
+  }
+
+  const headline = typeof parsed.headline === "string" ? parsed.headline.trim() : "";
+  const summary = typeof parsed.summary === "string" ? parsed.summary.trim() : "";
+  const realWorldImpact = typeof parsed.realWorldImpact === "string" ? parsed.realWorldImpact.trim() : "";
+
+  let keyPoints: string[] = [];
+  if (Array.isArray(parsed.keyPoints)) {
+    keyPoints = parsed.keyPoints.map(p => String(p).trim()).filter(Boolean);
+  } else if (typeof parsed.keyPoints === "string") {
+    keyPoints = parsed.keyPoints.split("\n").map(p => p.replace(/^[-*•]\s*/, "").trim()).filter(Boolean);
+  }
+
+  if (!headline || !summary) {
+    throw new Error("Generated post is missing headline or summary.");
+  }
+
+  return {
+    headline,
+    summary,
+    keyPoints: keyPoints.slice(0, 3),
+    realWorldImpact,
+  };
+}
+
 async function generatePost(candidate: NewsCandidate, postKind: "source" | "explainer") {
   const settings = await ensurePublisherDefaults();
   const language = settingsPostLanguage(settings);
@@ -693,41 +756,67 @@ async function generatePost(candidate: NewsCandidate, postKind: "source" | "expl
     settings.nextPostToneFeedback ? `${feedbackLabel}: ${settings.nextPostToneFeedback}` : null,
   ].filter(Boolean).join("\n");
   const llm = await resolveLlmConfig();
-  const response = await invokeLLM({
-    connection: { baseUrl: llm.baseUrl, apiKey: llm.apiKey },
-    model: llm.model,
-    messages: [
-      {
-        role: "system",
-        content: buildEditorialSystemPrompt(language),
-      },
-      {
-        role: "user",
-        content: buildPostGenerationPrompt({ language, postKind, editorialNotes, candidate }),
-      },
-    ],
-    response_format: {
-      type: "json_schema",
-      json_schema: {
-        name: "telegram_channel_post",
-        strict: true,
-        schema: {
-          type: "object",
-          properties: {
-            headline: { type: "string" },
-            summary: { type: "string" },
-            keyPoints: { type: "array", items: { type: "string" }, minItems: 3, maxItems: 3 },
-            realWorldImpact: { type: "string" },
+
+  const messages: Message[] = [
+    {
+      role: "system",
+      content: buildEditorialSystemPrompt(language),
+    },
+    {
+      role: "user",
+      content: buildPostGenerationPrompt({ language, postKind, editorialNotes, candidate }),
+    },
+  ];
+
+  let content: string | undefined;
+
+  try {
+    const response = await invokeLLM({
+      connection: { baseUrl: llm.baseUrl, apiKey: llm.apiKey },
+      model: llm.model,
+      messages,
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "telegram_channel_post",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: {
+              headline: { type: "string" },
+              summary: { type: "string" },
+              keyPoints: { type: "array", items: { type: "string" }, minItems: 3, maxItems: 3 },
+              realWorldImpact: { type: "string" },
+            },
+            required: ["headline", "summary", "keyPoints", "realWorldImpact"],
+            additionalProperties: false,
           },
-          required: ["headline", "summary", "keyPoints", "realWorldImpact"],
-          additionalProperties: false,
         },
       },
-    },
-  });
-  const content = response.choices[0]?.message?.content;
+    });
+    const raw = response.choices[0]?.message?.content;
+    content = typeof raw === "string" ? raw : undefined;
+  } catch (err) {
+    // If strict json_schema is unsupported (e.g. Ollama, older vLLM, certain OpenRouter engines),
+    // fallback gracefully to json_object format
+    const errorMessage = err instanceof Error ? err.message : String(err);
+    if (/schema|unsupported|response_format|bad request|400/i.test(errorMessage)) {
+      console.warn("Retrying post generation with json_object format fallback due to provider schema rejection:", errorMessage);
+      const fallbackResponse = await invokeLLM({
+        connection: { baseUrl: llm.baseUrl, apiKey: llm.apiKey },
+        model: llm.model,
+        messages,
+        response_format: { type: "json_object" },
+      });
+      const fallbackRaw = fallbackResponse.choices[0]?.message?.content;
+      content = typeof fallbackRaw === "string" ? fallbackRaw : undefined;
+    } else {
+      throw err;
+    }
+  }
+
   if (!content || typeof content !== "string") throw new Error("The language model returned no post content.");
-  const generated = JSON.parse(content) as GeneratedPost;
+  const generated = parseGeneratedPostJson(content);
   if (!outputMatchesLanguage(`${generated.headline}${generated.summary}`, language)) {
     throw new Error(`The language model did not return content in the configured output language (${languageName(language)}).`);
   }
@@ -807,6 +896,9 @@ export async function generateDraftForReview(options: { taskUid?: string; schedu
       scheduledFor,
     });
     const postId = Number(inserted[0].insertId);
+    if (settings.reportRecipientChatId) {
+      await sendDraftReviewNotificationToTelegram(settings.reportRecipientChatId, postId, generated.headline, content).catch(() => null);
+    }
     if (settings.nextPostToneFeedback) {
       await db.update(publisherSettings).set({ nextPostToneFeedback: null }).where(eq(publisherSettings.id, settings.id));
     }
@@ -922,7 +1014,7 @@ export async function publishNextPost(options: { isTest?: boolean; taskUid?: str
       deliveryStatus: "pending",
     });
     const postId = Number(inserted[0].insertId);
-    const telegramMessageId = await deliverToTelegram(content);
+    const telegramMessageId = await deliverToTelegram(content, { imageUrl: candidate.imageUrl });
     await db.update(publisherPosts).set({ deliveryStatus: "delivered", telegramMessageId, publishedAt: new Date() }).where(eq(publisherPosts.id, postId));
     await db.update(publisherSettings).set({
       nextPostKind: postKind === "source" ? "explainer" : "source",

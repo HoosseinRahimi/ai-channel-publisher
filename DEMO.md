@@ -17,9 +17,9 @@ cp .env.example .env
 For the bundled MySQL container, set these values in `.env`:
 
 ```env
-DATABASE_URL=mysql://publisher:change-me-publisher@mysql:3306/verborgene_schicht
+DATABASE_URL=mysql://publisher:change-me-publisher@mysql:3306/ai_channel_publisher
 MYSQL_ROOT_PASSWORD=change-me-root
-MYSQL_DATABASE=verborgene_schicht
+MYSQL_DATABASE=ai_channel_publisher
 MYSQL_USER=publisher
 MYSQL_PASSWORD=change-me-publisher
 ```

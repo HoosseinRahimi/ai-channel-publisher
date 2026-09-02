@@ -1,6 +1,6 @@
-# VerborgeneSchicht Publisher — Deployment Guide
+# AI Channel Publisher — Deployment Guide
 
-Deploy the Persian AI-news publisher to your own host. Supported paths:
+Deploy the autonomous AI channel publisher to your own host. Supported paths:
 
 - **Docker Compose** (recommended) — self-contained app + MySQL 8, TLS via a
   reverse proxy at the edge.
@@ -24,7 +24,7 @@ Deploy the Persian AI-news publisher to your own host. Supported paths:
 - **pnpm** (lockfile is `pnpm-lock.yaml`; use `pnpm install --frozen-lockfile`).
 - **A MySQL-compatible database** (MySQL 8 / TiDB / MariaDB) reachable from the app.
 - **Telegram**: a bot token (`@BotFather`) whose bot is an **administrator with
-  Post Messages** on `@VerborgeneSchicht`.
+  Post Messages** on your channel (e.g. `@your_channel`).
 - **LLM provider**: an OpenAI-compatible `v1/chat/completions` endpoint + key
   configured with `LLM_BASE_URL`, `LLM_API_KEY`, and `LLM_MODEL`.
 - **Authentication**: the built-in owner-only password login using
@@ -99,14 +99,14 @@ Run behind an HTTPS reverse proxy (example systemd unit below) and set
 `/api/scheduled/*`.
 
 ```ini
-# /etc/systemd/system/verborgene-schicht.service
+# /etc/systemd/system/ai-channel-publisher.service
 [Unit]
-Description=VerborgeneSchicht Publisher
+Description=AI Channel Publisher
 After=network.target
 
 [Service]
-WorkingDirectory=/opt/verborgene-schicht-publisher
-EnvironmentFile=/opt/verborgene-schicht-publisher/.env
+WorkingDirectory=/opt/ai-channel-publisher
+EnvironmentFile=/opt/ai-channel-publisher/.env
 ExecStart=/usr/bin/node dist/index.js
 Environment=NODE_ENV=production
 Restart=always

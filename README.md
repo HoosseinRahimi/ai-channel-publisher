@@ -1,5 +1,11 @@
 # AI Channel Publisher
 
+[![CI](https://github.com/HoosseinRahimi/ai-channel-publisher/actions/workflows/ci.yml/badge.svg)](https://github.com/HoosseinRahimi/ai-channel-publisher/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node: >=22](https://img.shields.io/badge/Node.js-%3E%3D22-green.svg)](https://nodejs.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org)
+[![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
+
 A self-hosted AI publishing system for Telegram channels. It monitors news sources, turns selected stories into channel-ready drafts with an OpenAI-compatible model, gives the owner a review window, publishes approved content, and tracks engagement from Telegram.
 
 The project is built as a production-style full-stack application rather than a single bot script: React dashboard, typed tRPC API, Express backend, MySQL with Drizzle ORM, scheduled publishing, encrypted model credentials, Telegram webhooks, analytics, tests, and Docker deployment.
@@ -9,22 +15,24 @@ The project is built as a production-style full-stack application rather than a 
 ## What it does
 
 1. Fetches enabled news homepages and RSS/Atom feeds.
-2. Deduplicates candidate stories.
-3. Uses an OpenAI-compatible LLM to generate a post with your editorial instructions and output language.
+2. Deduplicates candidate stories and parses media metadata.
+3. Uses an OpenAI-compatible LLM to generate a post with your editorial instructions and output language (with graceful JSON schema fallback for local models).
 4. Saves the result as a draft before the scheduled publishing slot.
-5. Lets the owner edit, hold, approve, or publish immediately.
-6. Sends approved posts through the Telegram Bot API.
+5. Lets the owner edit, hold, approve, or publish immediately from the dashboard or via interactive Telegram Bot DM buttons.
+6. Sends approved posts through the Telegram Bot API with optional photo/media support.
 7. Receives Telegram reaction updates through a protected webhook and turns them into source and post analytics.
 
 ## Highlights
 
 - **Configurable channel**: change the Telegram channel, display name, signature, and output language from the dashboard.
-- **Bring your own model**: OpenAI, OpenRouter, Groq, Together, Ollama, or another OpenAI-compatible endpoint.
+- **Bring your own model**: OpenAI, OpenRouter, Groq, Together, Ollama, LM Studio, or any OpenAI-compatible endpoint with automatic structured output fallback.
 - **Encrypted model credentials**: API keys saved from the UI are encrypted with AES-256-GCM and are never returned to the browser.
 - **Instruction Studio**: refine the standing editorial prompt with the same configured model before saving it.
 - **Multilingual UI**: Persian, English, and German with RTL/LTR switching.
 - **Multilingual publishing**: Persian, English, German, or a custom language defined by editorial guidance.
 - **Review-first automation**: drafts are prepared before each publishing slot and can be edited or held.
+- **1-Click Mobile Approval**: connected admins receive new draft previews directly in Telegram DM with inline `[Publish Now]`, `[Hold]`, and `[Discard]` buttons.
+- **Media & Hero Image support**: automatically extracts source images from enclosures and media tags to publish rich photo posts.
 - **Source management**: add RSS/Atom feeds or news pages, classify sources, and enable or disable them independently.
 - **Engagement intelligence**: reaction tracking, audience size, source comparison, alerts, CSV export, and weekly Markdown reports.
 - **Single-admin security model**: PBKDF2 password hashing plus JWT session cookies.

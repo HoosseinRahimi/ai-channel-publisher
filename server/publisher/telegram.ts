@@ -13,17 +13,63 @@ export async function getChannelHandle() {
   return process.env.TELEGRAM_CHANNEL_HANDLE?.trim() || "@your_channel";
 }
 
-export async function sendTelegramMessage(chatId: string, text: string) {
+export async function sendTelegramMessage(
+  chatId: string,
+  text: string,
+  options?: { replyMarkup?: Record<string, unknown> }
+) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("The Telegram bot token is not configured.");
+  const payload: Record<string, unknown> = {
+    chat_id: chatId,
+    text: text.slice(0, 4000),
+    disable_web_page_preview: true,
+  };
+  if (options?.replyMarkup) {
+    payload.reply_markup = options.replyMarkup;
+  }
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text: text.slice(0, 4000), disable_web_page_preview: true }),
+    body: JSON.stringify(payload),
     signal: AbortSignal.timeout(20000),
   });
-  const payload = await response.json().catch(() => null) as { ok?: boolean; description?: string } | null;
-  if (!response.ok || !payload?.ok) throw new Error(`Sending the Telegram direct message failed: ${payload?.description ?? response.status}`);
+  const result = await response.json().catch(() => null) as { ok?: boolean; description?: string } | null;
+  if (!response.ok || !result?.ok) throw new Error(`Sending the Telegram direct message failed: ${result?.description ?? response.status}`);
+}
+
+export async function answerTelegramCallbackQuery(callbackQueryId: string, text?: string) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  await fetch(`https://api.telegram.org/bot${token}/answerCallbackQuery`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ callback_query_id: callbackQueryId, text }),
+    signal: AbortSignal.timeout(10000),
+  }).catch(() => null);
+}
+
+export async function sendDraftReviewNotificationToTelegram(
+  chatId: string,
+  postId: number,
+  headline: string,
+  previewText: string
+) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  if (!token) return;
+  const shortPreview = previewText.length > 500 ? `${previewText.slice(0, 500)}...` : previewText;
+  const message = `📝 *New Draft for Review*\n\n*${headline}*\n\n${shortPreview}`;
+  await sendTelegramMessage(chatId, message, {
+    replyMarkup: {
+      inline_keyboard: [
+        [
+          { text: "✅ Publish Now", callback_data: `publish:${postId}` },
+          { text: "⏳ Hold", callback_data: `hold:${postId}` },
+          { text: "❌ Discard", callback_data: `discard:${postId}` },
+        ],
+      ],
+    },
+  });
 }
 
 export async function fetchTelegramChannelAudienceSize() {
@@ -41,10 +87,57 @@ export async function fetchTelegramChannelAudienceSize() {
   return payload.result;
 }
 
-export async function deliverToTelegram(content: string) {
+export async function deliverToTelegram(content: string, options?: { imageUrl?: string | null }) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("The Telegram bot token is not configured.");
   const channelHandle = await getChannelHandle();
+
+  if (options?.imageUrl && /^https?:\/\//i.test(options.imageUrl)) {
+    try {
+      const photoPayload: Record<string, unknown> = {
+        chat_id: channelHandle,
+        photo: options.imageUrl,
+      };
+      if (content.length <= 1024) {
+        photoPayload.caption = content;
+      }
+      const photoResponse = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(photoPayload),
+        signal: AbortSignal.timeout(20000),
+      });
+      const photoResult = (await photoResponse.json().catch(() => null)) as {
+        ok?: boolean;
+        result?: { message_id?: number };
+      } | null;
+
+      if (photoResult?.ok && photoResult.result?.message_id) {
+        // If content exceeded Telegram photo caption limit (1024 chars), follow up with the full text
+        if (content.length > 1024) {
+          const textResponse = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              chat_id: channelHandle,
+              text: content,
+              reply_to_message_id: photoResult.result.message_id,
+            }),
+            signal: AbortSignal.timeout(20000),
+          });
+          const textResult = (await textResponse.json().catch(() => null)) as {
+            ok?: boolean;
+            result?: { message_id?: number };
+          } | null;
+          return String(textResult?.result?.message_id ?? photoResult.result.message_id);
+        }
+        return String(photoResult.result.message_id);
+      }
+    } catch {
+      // Photo sending failed or timed out; fall through to standard sendMessage
+    }
+  }
+
   const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
     method: "POST",
     headers: { "content-type": "application/json" },

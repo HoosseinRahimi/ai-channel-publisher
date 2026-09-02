@@ -25,6 +25,7 @@ export type NewsCandidate = {
   sourceName: string;
   sourceKind: "primary" | "third_party";
   sourceText?: string;
+  imageUrl?: string;
 };
 
 export type GeneratedPost = {
@@ -141,6 +142,12 @@ export type TelegramReactionUpdate = {
 
 export type TelegramWebhookUpdate = TelegramReactionUpdate & {
   message?: { chat?: { id?: number | string }; text?: string };
+  callback_query?: {
+    id: string;
+    from?: { id?: number; username?: string };
+    data?: string;
+    message?: { chat?: { id?: number | string }; message_id?: number };
+  };
 };
 
 export function normalizeEngagementThresholdBps(value: number) {
@@ -157,8 +164,27 @@ export function isLowEngagement(reactionCount: number, audienceSize: number, thr
   return rate !== null && rate < thresholdBps;
 }
 
+export function decodeXmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&(?:apos|#39|#x27);/gi, "'")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&#(\d+);/g, (_, dec) => {
+      const num = parseInt(dec, 10);
+      return !isNaN(num) && num > 0 && num < 65536 ? String.fromCharCode(num) : "";
+    })
+    .replace(/&#x([0-9a-f]+);/gi, (_, hex) => {
+      const num = parseInt(hex, 16);
+      return !isNaN(num) && num > 0 && num < 65536 ? String.fromCharCode(num) : "";
+    });
+}
+
 export function stripMarkup(value: string) {
-  return value.replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  const stripped = value.replace(/<!\[CDATA\[|\]\]>/g, "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return decodeXmlEntities(stripped);
 }
 
 function absoluteUrl(baseUrl: string, value: string) {
@@ -170,14 +196,44 @@ function absoluteUrl(baseUrl: string, value: string) {
 }
 
 export function extractCandidates(source: PublisherSource, raw: string): NewsCandidate[] {
-  const items: Array<{ title: string; url: string }> = [];
+  const items: Array<{ title: string; url: string; imageUrl?: string }> = [];
   const itemBlocks = raw.match(/<(?:item|entry)\b[^>]*>[\s\S]*?<\/(?:item|entry)>/gi) ?? [];
   for (const block of itemBlocks) {
     const title = stripMarkup((block.match(/<title[^>]*>([\s\S]*?)<\/title>/i) ?? [])[1] ?? "");
-    const href = (block.match(/<link[^>]+href=["']([^"']+)["']/i) ?? [])[1]
-      ?? stripMarkup((block.match(/<link[^>]*>([\s\S]*?)<\/link>/i) ?? [])[1] ?? "");
+    
+    // In Atom/RSS feeds, link might be:
+    // <link rel="alternate" href="..." /> or <link>...</link> or <link href="..." />
+    // Prefer non-self link href
+    let href = "";
+    const linkMatches = Array.from(block.matchAll(/<link\b([^>]*?)(?:\/>|>([\s\S]*?)<\/link>)/gi));
+    for (const match of linkMatches) {
+      const attrs = match[1] || "";
+      const textContent = (match[2] || "").trim();
+      const hrefAttr = (attrs.match(/\bhref=["']([^"']+)["']/i) ?? [])[1];
+      const relAttr = (attrs.match(/\brel=["']([^"']+)["']/i) ?? [])[1];
+      if (relAttr === "self" || relAttr === "hub") continue;
+      if (hrefAttr) {
+        href = hrefAttr;
+        break;
+      }
+      if (textContent && /^https?:\/\//i.test(textContent)) {
+        href = textContent;
+        break;
+      }
+    }
+    if (!href) {
+      href = (block.match(/<link[^>]+href=["']([^"']+)["']/i) ?? [])[1]
+        ?? stripMarkup((block.match(/<link[^>]*>([\s\S]*?)<\/link>/i) ?? [])[1] ?? "");
+    }
+
     const url = absoluteUrl(source.homepage, href);
-    if (title.length > 12 && url) items.push({ title, url });
+
+    // Extract image if available (<enclosure>, <media:content>, <media:thumbnail>)
+    const imageMatch = block.match(/<(?:enclosure|media:content|media:thumbnail)[^>]+url=["']([^"']+)["']/i);
+    const rawImageUrl = imageMatch ? imageMatch[1] : undefined;
+    const imageUrl = rawImageUrl ? absoluteUrl(source.homepage, rawImageUrl) ?? undefined : undefined;
+
+    if (title.length > 12 && url) items.push({ title, url, imageUrl });
   }
 
   if (!items.length) {
