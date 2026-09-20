@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { getDb } from "../db";
 import { ENV } from "./env";
+import { snapshotPublisherMetrics } from "./metrics";
 
 /**
  * Liveness/readiness probe for load balancers, orchestrators, and uptime
@@ -18,6 +19,7 @@ export function registerHealthRoute(app: Express) {
       status: dbAvailable ? "ready" : "degraded",
       service: "verborgene-schicht-publisher",
       time: new Date().toISOString(),
+      metrics: snapshotPublisherMetrics(),
     };
     res.status(dbAvailable ? 200 : 503).json(body);
   });

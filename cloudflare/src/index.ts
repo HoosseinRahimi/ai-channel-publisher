@@ -89,6 +89,8 @@ export default {
 
     // tRPC endpoint (before the static/shorthand paths).
     if (url.pathname.startsWith("/api/trpc")) {
+      const origin = request.headers.get("origin");
+      if (request.method !== "GET" && origin && origin !== url.origin) return new Response(JSON.stringify({ error: "invalid-origin" }), { status: 403, headers: { "content-type": "application/json" } });
       return fetchRequestHandler({
         endpoint: "/api/trpc",
         req: request,

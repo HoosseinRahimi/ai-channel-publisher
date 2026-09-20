@@ -1,13 +1,14 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME, SESSION_MAX_AGE_MS } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { getAdminIdentity, verifyAdminCredentials } from "./_core/adminAuth";
 import { sdk } from "./_core/sdk";
 import { systemRouter } from "./_core/systemRouter";
 import { adminProcedure, publicProcedure, router } from "./_core/trpc";
-import { chatWithEditorModel, configureTelegramEngagementWebhook, createPublisherSource, createTelegramRecipientLink, DRAFT_CRON, deleteAnalyticsPreset, deliverLatestWeeklyReportToOwner, discardDraft, editDraft, ENGAGEMENT_ALERT_CRON, generateDraftForReview, generateWeeklyPerformanceReport, getLlmSettingsStatus, getPostHistory, getPublisherAnalytics, getPublisherDashboard, getSourcePerformanceAnalysis, getWeeklyReport, isTelegramEngagementConfigured, isValidTelegramTokenConfigured, listAnalyticsPresets, listAvailableModels, listSourceAlertConfigs, listWeeklyReports, PUBLISH_CRON, publishDraft, saveAnalyticsPreset, setDraftHeld, setEngagementAlertSchedule, setPublisherEnabled, setPublisherSchedules, setPublisherSourceActive, setWeeklyReportSchedule, testLlmConnection, updateEditorialPreferences, updateGeneralSettings, updateLlmSettings, updatePublisherSource, upsertSourceAlertConfig, verifyTelegramChannelAccess, WEEKLY_REPORT_CRON } from "./publisher";
+import { chatWithEditorModel, configureTelegramEngagementWebhook, createPublisherSource, createTelegramRecipientLink, DRAFT_CRON, deleteAnalyticsPreset, deliverLatestWeeklyReportToOwner, discardDraft, editDraft, ENGAGEMENT_ALERT_CRON, generateDraftForReview, generateWeeklyPerformanceReport, getLlmSettingsStatus, getPostHistory, getPublisherAnalytics, getPublisherDashboard, getSourcePerformanceAnalysis, getWeeklyReport, isTelegramEngagementConfigured, isValidTelegramTokenConfigured, listAnalyticsPresets, listAvailableModels, listDeliveryUnknownPosts, listSourceAlertConfigs, listWeeklyReports, PUBLISH_CRON, publishDraft, reconcileDelivery, saveAnalyticsPreset, setDraftHeld, setEngagementAlertSchedule, setPublisherEnabled, setPublisherSchedules, setPublisherSourceActive, setWeeklyReportSchedule, testLlmConnection, updateEditorialPreferences, updateGeneralSettings, updateLlmSettings, updatePublisherSource, upsertSourceAlertConfig, verifyTelegramChannelAccess, WEEKLY_REPORT_CRON } from "./publisher";
 import * as db from "./db";
 import { TRPCError } from "@trpc/server";
 import { z } from "zod";
+import { clearLoginFailures, isLoginAllowed, loginRateLimitKey, recordLoginFailure } from "./_core/loginRateLimit";
 
 export const appRouter = router({
     // if you need to use socket.io, read and register route in server/_core/index.ts, all api should start with '/api/' so that the gateway can route correctly
@@ -15,15 +16,19 @@ export const appRouter = router({
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     login: publicProcedure.input(z.object({ username: z.string().min(1).max(120), password: z.string().min(12).max(256) })).mutation(async ({ ctx, input }) => {
+      const rateLimitKey = loginRateLimitKey(ctx.req.ip, input.username);
+      if (!isLoginAllowed(rateLimitKey)) throw new TRPCError({ code: "TOO_MANY_REQUESTS", message: "Too many failed login attempts. Try again later." });
       if (!(await verifyAdminCredentials(input.username, input.password))) {
+        recordLoginFailure(rateLimitKey);
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid username or password." });
       }
+      clearLoginFailures(rateLimitKey);
       const identity = getAdminIdentity();
       await db.upsertUser(identity);
       const user = await db.getUserByOpenId(identity.openId);
       if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Could not create the admin account." });
-      const token = await sdk.createSessionToken(identity.openId, { name: identity.name ?? "Administrator", expiresInMs: ONE_YEAR_MS });
-      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: ONE_YEAR_MS });
+      const token = await sdk.createSessionToken(identity.openId, { name: identity.name ?? "Administrator", expiresInMs: SESSION_MAX_AGE_MS });
+      ctx.res.cookie(COOKIE_NAME, token, { ...getSessionCookieOptions(ctx.req), maxAge: SESSION_MAX_AGE_MS });
       return user;
     }),
     logout: publicProcedure.mutation(({ ctx }) => {
@@ -70,6 +75,8 @@ export const appRouter = router({
       return generateDraftForReview({ isManual: true });
     }),
     publishDraft: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => publishDraft(input.id)),
+    deliveryUnknown: adminProcedure.query(() => listDeliveryUnknownPosts()),
+    reconcileDelivery: adminProcedure.input(z.object({ id: z.number().int().positive(), delivered: z.boolean(), telegramMessageId: z.string().max(64).optional() })).mutation(({ input }) => reconcileDelivery(input.id, input)),
     updateDraft: adminProcedure.input(z.object({ id: z.number().int().positive(), content: z.string().min(30).max(4000) })).mutation(({ input }) => editDraft(input.id, input.content)),
     setDraftHeld: adminProcedure.input(z.object({ id: z.number().int().positive(), held: z.boolean() })).mutation(({ input }) => setDraftHeld(input.id, input.held)),
     discardDraft: adminProcedure.input(z.object({ id: z.number().int().positive() })).mutation(({ input }) => discardDraft(input.id)),
@@ -109,11 +116,12 @@ export const appRouter = router({
       return { taskUid, nextExecutionAt: null };
     }),
     enableTelegramEngagement: adminProcedure.mutation(async ({ ctx }) => {
-      const forwardedProtocol = ctx.req.headers["x-forwarded-proto"];
-      const protocol = (typeof forwardedProtocol === "string" ? forwardedProtocol.split(",")[0] : undefined) ?? ctx.req.protocol;
-      const host = ctx.req.get("host");
-      if (!host || host.includes("localhost")) throw new Error("Registering the engagement webhook is only possible on a deployed HTTPS instance.");
-      return configureTelegramEngagementWebhook(`${protocol}://${host}`);
+      const configuredBaseUrl = process.env.PUBLIC_BASE_URL?.trim();
+      if (!configuredBaseUrl) throw new Error("Set PUBLIC_BASE_URL to the deployed HTTPS origin before registering the webhook.");
+      let url: URL;
+      try { url = new URL(configuredBaseUrl); } catch { throw new Error("PUBLIC_BASE_URL must be a valid HTTPS URL."); }
+      if (url.protocol !== "https:" || url.pathname !== "/" || url.search || url.hash) throw new Error("PUBLIC_BASE_URL must be an origin such as https://publisher.example.com.");
+      return configureTelegramEngagementWebhook(url.origin);
     }),
     createSource: adminProcedure.input(z.object({
       name: z.string().min(2).max(160),

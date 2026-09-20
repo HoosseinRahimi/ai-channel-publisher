@@ -1,8 +1,33 @@
-import { timingSafeEqual } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 import { eq } from "drizzle-orm";
 import { getDb } from "../db";
 import { publisherSettings } from "../../drizzle/schema";
 import { telegramChannelSetupError } from "./editorial";
+
+function callbackSigningKey() {
+  return process.env.TELEGRAM_WEBHOOK_SECRET?.trim() || process.env.SETTINGS_SECRET?.trim() || process.env.JWT_SECRET?.trim() || null;
+}
+
+export function buildManagedCallbackData(action: "publish" | "hold" | "discard", postId: number, now = Math.floor(Date.now() / 1000)) {
+  const key = callbackSigningKey();
+  if (!key) return null;
+  const expiresAt = now + 24 * 60 * 60;
+  const payload = `v1:${action}:${postId}:${expiresAt}`;
+  const signature = createHmac("sha256", key).update(payload).digest("hex").slice(0, 16);
+  return `${payload}:${signature}`;
+}
+
+export function parseManagedCallbackData(value: string, now = Math.floor(Date.now() / 1000)) {
+  const key = callbackSigningKey();
+  const match = value.match(/^v1:(publish|hold|discard):(\d+):(\d+):([a-f0-9]{16})$/);
+  if (!key || !match) return null;
+  const [, action, postIdText, expiresAtText, signature] = match;
+  const payload = `v1:${action}:${postIdText}:${expiresAtText}`;
+  const expected = createHmac("sha256", key).update(payload).digest("hex").slice(0, 16);
+  if (Number(expiresAtText) < now) return null;
+  if (!timingSafeEqual(Buffer.from(signature), Buffer.from(expected))) return null;
+  return { action: action as "publish" | "hold" | "discard", postId: Number(postIdText) };
+}
 
 export async function getChannelHandle() {
   const db = await getDb();
@@ -59,17 +84,21 @@ export async function sendDraftReviewNotificationToTelegram(
   if (!token) return;
   const shortPreview = previewText.length > 500 ? `${previewText.slice(0, 500)}...` : previewText;
   const message = `📝 *New Draft for Review*\n\n*${headline}*\n\n${shortPreview}`;
-  await sendTelegramMessage(chatId, message, {
-    replyMarkup: {
+  const callbackData = {
+    publish: buildManagedCallbackData("publish", postId),
+    hold: buildManagedCallbackData("hold", postId),
+    discard: buildManagedCallbackData("discard", postId),
+  };
+  const replyMarkup = callbackData.publish && callbackData.hold && callbackData.discard ? {
       inline_keyboard: [
         [
-          { text: "✅ Publish Now", callback_data: `publish:${postId}` },
-          { text: "⏳ Hold", callback_data: `hold:${postId}` },
-          { text: "❌ Discard", callback_data: `discard:${postId}` },
+          { text: "✅ Publish Now", callback_data: callbackData.publish },
+          { text: "⏳ Hold", callback_data: callbackData.hold },
+          { text: "❌ Discard", callback_data: callbackData.discard },
         ],
       ],
-    },
-  });
+    } : undefined;
+  await sendTelegramMessage(chatId, message, replyMarkup ? { replyMarkup } : undefined);
 }
 
 export async function fetchTelegramChannelAudienceSize() {

@@ -5,6 +5,7 @@ import { decryptSecret, encryptSecret } from "../_core/settingsCrypto";
 import { getDb } from "../db";
 import {
   publisherPosts,
+  publisherDeliveryAttempts,
   publisherEngagementAlerts,
   publisherAnalyticsPresets,
   publisherPostEngagement,
@@ -26,6 +27,8 @@ import {
   canAutoPublishDraft,
   extractCandidates,
   hashText,
+  isAuthorizedTelegramCallback,
+  allowsScheduledPublisherRun,
   isLowEngagement,
   isReviewableDraftStatus,
   matchesDuplicate,
@@ -73,6 +76,8 @@ import {
   type PostLanguage,
 } from "./languages";
 import { resolveLlmConfig } from "./llmConfig";
+import { assertSafeRemoteUrl, fetchSafeRemote } from "../_core/urlPolicy";
+import { incrementPublisherMetric } from "../_core/metrics";
 import {
   answerTelegramCallbackQuery,
   dbUpdateEngagementWebhookEnabled,
@@ -81,6 +86,7 @@ import {
   sendDraftReviewNotificationToTelegram,
   sendTelegramMessage,
   verifyTelegramChannelAccess,
+  parseManagedCallbackData,
 } from "./telegram";
 
 export async function ensurePublisherDefaults() {
@@ -243,10 +249,22 @@ export async function recordTelegramReactionUpdate(update: TelegramReactionUpdat
 
 export async function handleTelegramWebhookUpdate(update: TelegramWebhookUpdate) {
   if (update.callback_query?.data) {
-    const data = update.callback_query.data;
-    const [action, idStr] = data.split(":");
-    const postId = parseInt(idStr, 10);
-    if (postId && ["publish", "hold", "discard"].includes(action)) {
+    const settings = await ensurePublisherDefaults();
+    const recipientChatId = settings.reportRecipientChatId;
+    const callbackUserId = update.callback_query.from?.id;
+    const callbackChatId = update.callback_query.message?.chat?.id;
+    const authorized = isAuthorizedTelegramCallback({ recipientChatId, callbackUserId, callbackChatId });
+    if (!authorized) {
+      await answerTelegramCallbackQuery(update.callback_query.id, "⛔ Unauthorized");
+      return { kind: "callback-query" as const, authorized: false };
+    }
+    const parsedCallback = parseManagedCallbackData(update.callback_query.data);
+    if (!parsedCallback) {
+      await answerTelegramCallbackQuery(update.callback_query.id, "⚠️ Invalid or expired action");
+      return { kind: "callback-query" as const, authorized: true, valid: false };
+    }
+    const { action, postId } = parsedCallback;
+    if (postId) {
       try {
         if (action === "publish") {
           await publishDraft(postId);
@@ -285,7 +303,7 @@ export async function generateWeeklyPerformanceReport(now = new Date()) {
   const postIds = posts.map(post => post.id);
   const engagement = postIds.length ? (await db.select().from(publisherPostEngagement)).filter(record => postIds.includes(record.publisherPostId)) : [];
   const reportMarkdown = buildWeeklyReportMarkdown({ periodStart: start, periodEnd: end, posts, engagement });
-  const metricsJson = JSON.stringify({ posts: posts.length, delivered: posts.filter(post => post.deliveryStatus === "delivered").length, failed: posts.filter(post => post.deliveryStatus === "failed").length, reactions: engagement.reduce((total, record) => total + record.reactionCount, 0) });
+  const metricsJson = JSON.stringify({ posts: posts.length, delivered: posts.filter(post => post.deliveryStatus === "delivered").length, failed: posts.filter(post => ["failed", "delivery_unknown"].includes(post.deliveryStatus)).length, reactions: engagement.reduce((total, record) => total + record.reactionCount, 0) });
   await db.insert(publisherWeeklyReports).values({ periodStart: start, periodEnd: end, reportMarkdown, metricsJson }).onDuplicateKeyUpdate({ set: { reportMarkdown, metricsJson, generatedAt: new Date() } });
   const report = (await db.select().from(publisherWeeklyReports).where(and(eq(publisherWeeklyReports.periodStart, start), eq(publisherWeeklyReports.periodEnd, end))).limit(1))[0];
   await deliverWeeklyReportToOwner(report.id);
@@ -569,6 +587,7 @@ export async function updateLlmSettings(input: {
       try {
         const url = new URL(baseUrl);
         if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Unsupported protocol");
+        await assertSafeRemoteUrl(baseUrl, "LLM base URL");
       } catch {
         throw new Error("LLM base URL must be a valid http or https URL.");
       }
@@ -649,12 +668,36 @@ export async function chatWithEditorModel(messages: Array<{ role: "user" | "assi
 
 async function fetchCandidates(source: PublisherSource): Promise<NewsCandidate[]> {
   const url = source.feedUrl ?? source.homepage;
-  const response = await fetch(url, {
+  const response = await fetchSafeRemote(url, {
     headers: { "user-agent": "AIChannelPublisher/1.0 (+news aggregation)" },
     signal: AbortSignal.timeout(12000),
   });
   if (!response.ok) throw new Error(`${source.name} returned ${response.status}`);
-  return extractCandidates(source, await response.text());
+  const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+  if (contentType && !/(text\/|xml|json|html)/i.test(contentType)) throw new Error(`${source.name} returned an unsupported content type.`);
+  return extractCandidates(source, await readBoundedResponseText(response));
+}
+
+const MAX_SOURCE_RESPONSE_BYTES = 2_000_000;
+
+async function readBoundedResponseText(response: Response) {
+  const declaredLength = Number(response.headers.get("content-length") ?? 0);
+  if (declaredLength > MAX_SOURCE_RESPONSE_BYTES) throw new Error("Source response exceeds the 2 MB limit.");
+  if (!response.body) return response.text();
+  const reader = response.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.byteLength;
+    if (total > MAX_SOURCE_RESPONSE_BYTES) { await reader.cancel(); throw new Error("Source response exceeds the 2 MB limit."); }
+    chunks.push(value);
+  }
+  const merged = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) { merged.set(chunk, offset); offset += chunk.byteLength; }
+  return new TextDecoder().decode(merged);
 }
 
 async function isDuplicate(candidate: NewsCandidate) {
@@ -694,12 +737,15 @@ async function pickCandidate() {
 
 async function addArticleContext(candidate: NewsCandidate) {
   try {
-    const response = await fetch(candidate.url, {
+    await assertSafeRemoteUrl(candidate.url, "Article URL");
+    const response = await fetchSafeRemote(candidate.url, {
       headers: { "user-agent": "AIChannelPublisher/1.0 (+news aggregation)" },
       signal: AbortSignal.timeout(12000),
     });
     if (!response.ok) return candidate;
-    const html = await response.text();
+    const contentType = response.headers.get("content-type")?.toLowerCase() ?? "";
+    if (contentType && !/(text\/|xml|html)/i.test(contentType)) return candidate;
+    const html = await readBoundedResponseText(response);
     const withoutScripts = html
       .replace(/<script[\s\S]*?<\/script>/gi, " ")
       .replace(/<style[\s\S]*?<\/style>/gi, " ");
@@ -862,6 +908,9 @@ export async function generateDraftForReview(options: { taskUid?: string; schedu
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable.");
   const settings = await ensurePublisherDefaults();
+  if (!allowsScheduledPublisherRun(settings.isEnabled, options.isManual)) {
+    return { status: "skipped" as const, reason: "publisher-disabled" };
+  }
   const scheduledFor = options.scheduledFor ?? nextThreeHourBoundary();
   const runKey = options.isManual ? `manual-draft-${randomUUID()}` : `draft-${options.taskUid ?? "schedule"}-${scheduledFor.getTime()}`;
   if (!(await createRun(runKey, options.taskUid))) return { status: "skipped" as const, reason: "Draft already generated for this review window." };
@@ -896,6 +945,7 @@ export async function generateDraftForReview(options: { taskUid?: string; schedu
       scheduledFor,
     });
     const postId = Number(inserted[0].insertId);
+    incrementPublisherMetric("draft_created");
     if (settings.reportRecipientChatId) {
       await sendDraftReviewNotificationToTelegram(settings.reportRecipientChatId, postId, generated.headline, content).catch(() => null);
     }
@@ -954,27 +1004,88 @@ export async function publishDraft(postId: number, options: { isTest?: boolean }
   if (!db) throw new Error("Database is unavailable.");
   const post = (await db.select().from(publisherPosts).where(eq(publisherPosts.id, postId)).limit(1))[0];
   if (!post || !isReviewableDraftStatus(post.deliveryStatus)) throw new Error("This draft is no longer ready to publish.");
-  if (await isDuplicateContent(post.content)) throw new Error("A similar version has already been published.");
-  await verifyTelegramChannelAccess();
-  await db.update(publisherPosts).set({ deliveryStatus: "pending", isTest: Boolean(options.isTest) }).where(eq(publisherPosts.id, postId));
+  const claim = await db.update(publisherPosts).set({ deliveryStatus: "pending", isTest: Boolean(options.isTest), errorMessage: null }).where(and(
+    eq(publisherPosts.id, postId),
+    or(eq(publisherPosts.deliveryStatus, "draft"), eq(publisherPosts.deliveryStatus, "held"))
+  ));
+  if (!claim[0].affectedRows) {
+    incrementPublisherMetric("publish_conflict");
+    return { status: "skipped" as const, reason: "publish-conflict" };
+  }
+  const attemptId = randomUUID();
+  let telegramMessageId: string;
   try {
-    const telegramMessageId = await deliverToTelegram(post.content);
-    await db.update(publisherPosts).set({ deliveryStatus: "delivered", telegramMessageId, publishedAt: new Date() }).where(eq(publisherPosts.id, postId));
-    const settings = await ensurePublisherDefaults();
-    await db.update(publisherSettings).set({
-      nextPostKind: post.postKind === "source" ? "explainer" : "source",
-      lastPublishedAt: new Date(),
-    }).where(eq(publisherSettings.id, settings.id));
-    return { status: "delivered" as const, postId };
+    await db.insert(publisherDeliveryAttempts).values({ publisherPostId: postId, attemptId, status: "sending" });
+    if (await isDuplicateContent(post.content)) {
+      await db.update(publisherPosts).set({ deliveryStatus: "skipped", errorMessage: "A similar version has already been published." }).where(eq(publisherPosts.id, postId));
+      await db.update(publisherDeliveryAttempts).set({ status: "skipped", completedAt: new Date(), errorMessage: "A similar version has already been published." }).where(eq(publisherDeliveryAttempts.attemptId, attemptId));
+      incrementPublisherMetric("duplicate_prevented");
+      return { status: "skipped" as const, reason: "duplicate-content" };
+    }
+    await verifyTelegramChannelAccess();
+    telegramMessageId = await deliverToTelegram(post.content);
   } catch (error) {
+    incrementPublisherMetric("publish_failed");
+    await db.update(publisherDeliveryAttempts).set({ status: "failed", completedAt: new Date(), errorMessage: error instanceof Error ? error.message : String(error) }).where(eq(publisherDeliveryAttempts.attemptId, attemptId)).catch(() => undefined);
     await db.update(publisherPosts).set({ deliveryStatus: "failed", errorMessage: error instanceof Error ? error.message : String(error) }).where(eq(publisherPosts.id, postId));
     throw error;
   }
+  try {
+    await db.update(publisherPosts).set({ deliveryStatus: "delivered", telegramMessageId, publishedAt: new Date() }).where(eq(publisherPosts.id, postId));
+  } catch (error) {
+    // Telegram accepted the message, but persistence failed. Never retry this
+    // automatically: an operator must reconcile the delivery first.
+    await db.update(publisherPosts).set({
+      deliveryStatus: "delivery_unknown",
+      telegramMessageId,
+      errorMessage: error instanceof Error ? error.message : String(error),
+    }).where(eq(publisherPosts.id, postId)).catch(() => undefined);
+    await db.update(publisherDeliveryAttempts).set({ status: "delivery_unknown", telegramMessageId, completedAt: new Date(), errorMessage: error instanceof Error ? error.message : String(error) }).where(eq(publisherDeliveryAttempts.attemptId, attemptId)).catch(() => undefined);
+    incrementPublisherMetric("publish_unknown");
+    throw new Error("Telegram accepted the post, but delivery could not be recorded. Reconcile it before retrying.");
+  }
+  await db.update(publisherDeliveryAttempts).set({ status: "delivered", telegramMessageId, completedAt: new Date() }).where(eq(publisherDeliveryAttempts.attemptId, attemptId)).catch(() => undefined);
+  const settings = await ensurePublisherDefaults();
+  await db.update(publisherSettings).set({
+    nextPostKind: post.postKind === "source" ? "explainer" : "source",
+    lastPublishedAt: new Date(),
+  }).where(eq(publisherSettings.id, settings.id));
+  incrementPublisherMetric("publish_success");
+  return { status: "delivered" as const, postId };
+}
+
+export async function reconcileDelivery(postId: number, input: { delivered: boolean; telegramMessageId?: string }) {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  if (input.delivered && !input.telegramMessageId?.trim()) throw new Error("A Telegram message ID is required when marking delivery complete.");
+  const delivered = input.delivered;
+  const result = await db.update(publisherPosts).set({
+    deliveryStatus: delivered ? "delivered" : "draft",
+    telegramMessageId: delivered ? input.telegramMessageId!.trim() : null,
+    publishedAt: delivered ? new Date() : null,
+    errorMessage: null,
+  }).where(and(eq(publisherPosts.id, postId), eq(publisherPosts.deliveryStatus, "delivery_unknown")));
+  if (!result[0].affectedRows) throw new Error("Only a delivery_unknown post can be reconciled.");
+  await db.update(publisherDeliveryAttempts).set({
+    status: delivered ? "delivered" : "skipped",
+    telegramMessageId: delivered ? input.telegramMessageId!.trim() : null,
+    completedAt: new Date(),
+    errorMessage: delivered ? null : "Operator confirmed that Telegram did not receive the message.",
+  }).where(and(eq(publisherDeliveryAttempts.publisherPostId, postId), eq(publisherDeliveryAttempts.status, "delivery_unknown")));
+  return { postId, status: delivered ? "delivered" as const : "draft" as const };
+}
+
+export async function listDeliveryUnknownPosts() {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  return db.select().from(publisherPosts).where(eq(publisherPosts.deliveryStatus, "delivery_unknown")).orderBy(desc(publisherPosts.updatedAt)).limit(20);
 }
 
 export async function autoPublishReadyDraft() {
   const db = await getDb();
   if (!db) throw new Error("Database is unavailable.");
+  const settings = await ensurePublisherDefaults();
+  if (!settings.isEnabled) return { status: "skipped" as const, reason: "publisher-disabled" };
   const draft = (await db.select().from(publisherPosts).where(and(
     eq(publisherPosts.deliveryStatus, "draft"),
     lte(publisherPosts.scheduledFor, new Date())
@@ -988,6 +1099,7 @@ export async function publishNextPost(options: { isTest?: boolean; taskUid?: str
   if (!db) throw new Error("Database is unavailable.");
   const settings = await ensurePublisherDefaults();
   const isTest = Boolean(options.isTest);
+  if (!allowsScheduledPublisherRun(settings.isEnabled, isTest)) return { status: "skipped" as const, reason: "publisher-disabled" };
   const runKey = buildRunKey({ isTest, taskUid: options.taskUid });
   if (!(await createRun(runKey, options.taskUid))) return { status: "skipped" as const, reason: "Already processed this cycle." };
 

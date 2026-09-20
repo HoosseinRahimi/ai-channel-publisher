@@ -53,6 +53,7 @@ Optional but needed for real publishing:
 |---|---|
 | `TELEGRAM_BOT_TOKEN` | Publishes to the channel (server-side only). |
 | `TELEGRAM_WEBHOOK_SECRET` | Authenticates the engagement webhook. |
+| `PUBLIC_BASE_URL` | Deployed HTTPS origin used for Telegram webhook registration. |
 | `LLM_BASE_URL`, `LLM_API_KEY`, `LLM_MODEL` | OpenAI-compatible LLM configuration. |
 | `ENABLE_INPROCESS_SCHEDULER=true` | Self-hosted Node scheduling. |
 

@@ -8,6 +8,7 @@ import { ENV } from "../_core/env";
 import { decryptSecret } from "../_core/settingsCrypto";
 import { getDb } from "../db";
 import { publisherSettings } from "../../drizzle/schema";
+import { assertSafeRemoteUrl } from "../_core/urlPolicy";
 
 export type ResolvedLlmConfig = LlmConnection & {
   model: string;
@@ -34,6 +35,7 @@ export async function resolveLlmConfig(): Promise<ResolvedLlmConfig> {
   const baseUrl = dbBaseUrl || ENV.llmApiUrl;
   const model = dbModel || ENV.llmModel;
   const apiKey = dbApiKey || ENV.llmApiKey;
+  if (baseUrl) await assertSafeRemoteUrl(baseUrl, "LLM base URL");
 
   return {
     baseUrl,

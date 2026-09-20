@@ -1,4 +1,5 @@
 import { ENV } from "./env";
+import { assertSafeRemoteUrl } from "./urlPolicy";
 
 export type Role = "system" | "user" | "assistant" | "tool" | "function";
 
@@ -214,6 +215,7 @@ const normalizeToolChoice = (
 
 const resolveApiUrl = () => {
   if (!ENV.llmApiUrl) throw new Error("LLM_BASE_URL is not configured");
+  assertSafeRemoteUrl(ENV.llmApiUrl, "LLM base URL");
   return `${ENV.llmApiUrl.replace(/\/$/, "")}/v1/chat/completions`;
 };
 
@@ -271,6 +273,7 @@ const normalizeResponseFormat = ({
 const RETRY_MAX_RETRIES = 4;
 const RETRY_BASE_DELAY_MS = 500;
 const RETRY_MAX_DELAY_MS = 30_000;
+const LLM_REQUEST_TIMEOUT_MS = 60_000;
 
 type FetchInit = NonNullable<Parameters<typeof fetch>[1]>;
 
@@ -297,7 +300,7 @@ const computeBackoffDelay = (
   return Math.min(Math.max(jittered, retryAfterMs ?? 0), RETRY_MAX_DELAY_MS);
 };
 
-// Retries non-2xx responses and network errors with exponential backoff, then
+// Retries transient responses and network errors with exponential backoff, then
 // returns the final Response so callers keep their existing error handling.
 const fetchWithBackoff = async (
   url: string,
@@ -307,8 +310,9 @@ const fetchWithBackoff = async (
 
   for (let attempt = 0; attempt <= RETRY_MAX_RETRIES; attempt++) {
     try {
-      const response = await fetch(url, init);
-      if (response.ok || attempt === RETRY_MAX_RETRIES) {
+      const response = await fetch(url, { ...init, signal: AbortSignal.timeout(LLM_REQUEST_TIMEOUT_MS) });
+      const retryable = response.status === 408 || response.status === 429 || response.status >= 500;
+      if (response.ok || !retryable || attempt === RETRY_MAX_RETRIES) {
         return response;
       }
 
@@ -437,6 +441,7 @@ export async function listLLMModels(): Promise<ModelsResponse> {
   assertApiKey();
 
   if (!ENV.llmApiUrl) throw new Error("LLM_BASE_URL is not configured");
+  assertSafeRemoteUrl(ENV.llmApiUrl, "LLM base URL");
   const url = `${ENV.llmApiUrl.replace(/\/$/, "")}/v1/models`;
 
   const response = await fetchWithBackoff(url, {

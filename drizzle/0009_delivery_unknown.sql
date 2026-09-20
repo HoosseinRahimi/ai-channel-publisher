@@ -1,0 +1,1 @@
+ALTER TABLE `publisher_posts` MODIFY COLUMN `deliveryStatus` enum('draft','held','pending','delivered','delivery_unknown','failed','skipped','discarded') NOT NULL DEFAULT 'pending';--> statement-breakpoint

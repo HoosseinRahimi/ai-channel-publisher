@@ -82,10 +82,16 @@ function normalizeHttpUrl(value: string, label: string) {
   try {
     const url = new URL(value.trim());
     if (url.protocol !== "https:" && url.protocol !== "http:") throw new Error("Unsupported protocol");
+    if (isPrivateNetworkHost(url.hostname) && process.env.ALLOW_PRIVATE_NETWORK_URLS !== "true") throw new Error("Private network URLs require explicit opt-in");
     return url.toString();
   } catch {
     throw new Error(`${label} باید یک نشانی معتبر http یا https باشد.`);
   }
+}
+
+function isPrivateNetworkHost(hostname: string) {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  return host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host === "::1" || host === "0.0.0.0" || host.startsWith("127.") || host.startsWith("10.") || host.startsWith("192.168.") || host.startsWith("169.254.") || /^172\.(1[6-9]|2\d|3[01])\./.test(host) || host.startsWith("fc") || host.startsWith("fd") || host.startsWith("fe80:");
 }
 
 export function normalizeEditorialGuidance(value: string | null | undefined, label = "راهنمای لحن") {
@@ -124,6 +130,10 @@ export type TelegramReactionUpdate = {
 export type TelegramWebhookUpdate = TelegramReactionUpdate & {
   message?: { chat?: { id?: number | string }; text?: string };
 };
+
+export function allowsScheduledPublisherRun(isEnabled: boolean, isManual = false) {
+  return isManual || isEnabled;
+}
 
 export function normalizeEngagementThresholdBps(value: number) {
   if (!Number.isInteger(value) || value < 1 || value > 5000) throw new Error("آستانهٔ تعامل باید بین ۰٫۰۱ تا ۵۰ درصد باشد.");

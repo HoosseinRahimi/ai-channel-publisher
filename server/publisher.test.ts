@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDailySourcePerformanceTrend, buildEngagementAnalytics, buildPublisherAnalytics, buildRunKey, buildSourceEngagementComparison, buildSourceLowEngagementCandidates, buildTelegramRecipientCode, buildWeeklyReportDeliveryUpdate, buildWeeklyReportMarkdown, calculateEngagementRateBps, canAutoPublishDraft, canDeliverWeeklyReport, decodeXmlEntities, DRAFT_CRON, extractCandidates, getCompletedWeekRange, getSourceAlertWeekRange, hashText, isLowEngagement, isPublishedHistoryStatus, isReviewableDraftStatus, isTelegramEngagementConfigured, isValidTelegramRecipientCode, isValidTelegramTokenConfigured, isValidTelegramWebhookSecret, matchesDuplicate, normalizeAnalyticsPresetName, normalizeEditedDraftContent, normalizeEditorialGuidance, normalizeEngagementThresholdBps, normalizeSourcePerformanceFilters, normalizeTopic, outputMatchesLanguage, PERSIAN_EDITORIAL_SYSTEM_PROMPT, PUBLISH_CRON, renderChannelPost, selectLatestWeeklyReport, stripMarkup, summarizeTelegramReactions, telegramChannelSetupError, titleFromContent, validatePublisherSource, WEEKLY_REPORT_CRON } from "./publisher";
+import { allowsScheduledPublisherRun, buildDailySourcePerformanceTrend, buildEngagementAnalytics, buildManagedCallbackData, buildPublisherAnalytics, buildRunKey, buildSourceEngagementComparison, buildSourceLowEngagementCandidates, buildTelegramRecipientCode, buildWeeklyReportDeliveryUpdate, buildWeeklyReportMarkdown, calculateEngagementRateBps, canAutoPublishDraft, canDeliverWeeklyReport, decodeXmlEntities, DRAFT_CRON, extractCandidates, getCompletedWeekRange, getSourceAlertWeekRange, hashText, isAuthorizedTelegramCallback, isLowEngagement, isPublishedHistoryStatus, isReviewableDraftStatus, isTelegramEngagementConfigured, isValidTelegramRecipientCode, isValidTelegramTokenConfigured, isValidTelegramWebhookSecret, matchesDuplicate, normalizeAnalyticsPresetName, normalizeEditedDraftContent, normalizeEditorialGuidance, normalizeEngagementThresholdBps, normalizeSourcePerformanceFilters, normalizeTopic, outputMatchesLanguage, parseManagedCallbackData, PERSIAN_EDITORIAL_SYSTEM_PROMPT, PUBLISH_CRON, renderChannelPost, selectLatestWeeklyReport, stripMarkup, summarizeTelegramReactions, telegramChannelSetupError, titleFromContent, validatePublisherSource, WEEKLY_REPORT_CRON } from "./publisher";
 
 describe("publisher utilities", () => {
   it("normalizes a topic deterministically for duplicate checks", () => {
@@ -122,6 +122,32 @@ describe("publisher utilities", () => {
     expect(isReviewableDraftStatus("delivered")).toBe(false);
     expect(canAutoPublishDraft("draft", new Date("2026-08-13T17:59:59.000Z"), now)).toBe(true);
     expect(canAutoPublishDraft("held", new Date("2026-08-13T17:59:59.000Z"), now)).toBe(false);
+  });
+
+  it("keeps scheduled work paused while allowing explicit manual runs", () => {
+    expect(allowsScheduledPublisherRun(false)).toBe(false);
+    expect(allowsScheduledPublisherRun(true)).toBe(true);
+    expect(allowsScheduledPublisherRun(false, true)).toBe(true);
+  });
+
+  it("authorizes Telegram management callbacks only for the registered recipient", () => {
+    expect(isAuthorizedTelegramCallback({ recipientChatId: "123", callbackUserId: 123, callbackChatId: 123 })).toBe(true);
+    expect(isAuthorizedTelegramCallback({ recipientChatId: "123", callbackUserId: 456, callbackChatId: 123 })).toBe(false);
+    expect(isAuthorizedTelegramCallback({ recipientChatId: "123", callbackUserId: 123, callbackChatId: 456 })).toBe(false);
+    expect(isAuthorizedTelegramCallback({ callbackUserId: 123 })).toBe(false);
+  });
+
+  it("signs Telegram management callbacks and rejects tampering or expiry", () => {
+    const previous = process.env.TELEGRAM_WEBHOOK_SECRET;
+    process.env.TELEGRAM_WEBHOOK_SECRET = "callback-secret";
+    const callback = buildManagedCallbackData("publish", 42, 1_000);
+    expect(callback).toMatch(/^v1:publish:42:87400:[a-f0-9]{16}$/);
+    expect(parseManagedCallbackData(callback!, 1_001)).toEqual({ action: "publish", postId: 42 });
+    const tampered = `${callback!.slice(0, -1)}${callback!.endsWith("0") ? "1" : "0"}`;
+    expect(parseManagedCallbackData(tampered, 1_001)).toBeNull();
+    expect(parseManagedCallbackData(callback!, 87_401)).toBeNull();
+    if (previous === undefined) delete process.env.TELEGRAM_WEBHOOK_SECRET;
+    else process.env.TELEGRAM_WEBHOOK_SECRET = previous;
   });
 
   it("keeps review drafts out of the published-history filter", () => {

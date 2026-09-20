@@ -100,7 +100,7 @@ export const publisherPosts = sqliteTable(
     normalizedTopic: text("normalizedTopic").notNull(),
     contentFingerprint: text("contentFingerprint").notNull(),
     deliveryStatus: text("deliveryStatus", {
-      enum: ["draft", "held", "pending", "delivered", "failed", "skipped", "discarded"],
+      enum: ["draft", "held", "pending", "delivered", "delivery_unknown", "failed", "skipped", "discarded"],
     })
       .notNull()
       .default("pending"),
@@ -117,6 +117,24 @@ export const publisherPosts = sqliteTable(
     reviewIdx: index("publisher_posts_review_idx").on(table.deliveryStatus, table.scheduledFor),
     topicIdx: index("publisher_posts_topic_idx").on(table.normalizedTopic),
     sourceHashIdx: index("publisher_posts_source_hash_idx").on(table.sourceUrlHash),
+  })
+);
+
+export const publisherDeliveryAttempts = sqliteTable(
+  "publisher_delivery_attempts",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    publisherPostId: integer("publisherPostId").notNull(),
+    attemptId: text("attemptId").notNull(),
+    status: text("status", { enum: ["sending", "delivered", "delivery_unknown", "failed", "skipped"] }).notNull().default("sending"),
+    telegramMessageId: text("telegramMessageId"),
+    errorMessage: text("errorMessage"),
+    startedAt: integer("startedAt", { mode: "timestamp" }).notNull().$defaultFn(() => new Date()),
+    completedAt: integer("completedAt", { mode: "timestamp" }),
+  },
+  table => ({
+    attemptIdx: uniqueIndex("publisher_delivery_attempt_id_uq").on(table.attemptId),
+    postIdx: index("publisher_delivery_attempt_post_idx").on(table.publisherPostId, table.startedAt),
   })
 );
 

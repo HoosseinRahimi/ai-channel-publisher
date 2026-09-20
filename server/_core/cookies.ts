@@ -1,13 +1,5 @@
 import type { CookieOptions, Request } from "express";
 
-const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "::1"]);
-
-function isIpAddress(host: string) {
-  // Basic IPv4 check and IPv6 presence detection.
-  if (/^\d{1,3}(\.\d{1,3}){3}$/.test(host)) return true;
-  return host.includes(":");
-}
-
 function isSecureRequest(req: Request) {
   if (req.protocol === "https") return true;
 
@@ -42,7 +34,11 @@ export function getSessionCookieOptions(
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    // The dashboard is same-origin. Lax works on localhost over HTTP and
+    // avoids the invalid SameSite=None + Secure=false combination.
+    sameSite: "lax",
+    // Production sessions must never be sent over cleartext HTTP. Forwarded
+    // HTTPS is accepted for a known reverse-proxy deployment.
+    secure: isSecureRequest(req) || process.env.NODE_ENV === "production",
   };
 }

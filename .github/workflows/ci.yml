@@ -12,8 +12,23 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck and Test
+    name: Verify application
     runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: mysql://root:ci-password@127.0.0.1:3306/ai_channel_publisher
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci-password
+          MYSQL_DATABASE: ai_channel_publisher
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -pci-password"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -32,8 +47,48 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Apply MySQL migrations
+        run: pnpm db:migrate
+
       - name: Run TypeScript typecheck
         run: pnpm check
 
       - name: Run test suite
         run: pnpm test
+
+      - name: Run production build
+        run: pnpm build
+
+      - name: Typecheck Cloudflare worker
+        run: pnpm exec tsc --noEmit -p cloudflare/tsconfig.json
+
+      - name: Build production container
+        run: docker build --tag ai-channel-publisher:ci .
+
+      - name: Run production container smoke test
+        run: |
+          docker run --detach --name ai-channel-publisher-ci --network host \
+            --env NODE_ENV=production \
+            --env PORT=3100 \
+            --env VITE_APP_ID=ci \
+            --env JWT_SECRET=ci-jwt-secret \
+            --env ADMIN_PASSWORD_HASH=ci-password-hash \
+            --env DATABASE_URL=mysql://root:ci-password@127.0.0.1:3306/ai_channel_publisher \
+            ai-channel-publisher:ci
+          trap 'docker logs ai-channel-publisher-ci; docker rm --force ai-channel-publisher-ci' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:3100/api/health/live; then exit 0; fi
+            sleep 2
+          done
+          exit 1
+
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
+      - name: Audit all dependencies
+        continue-on-error: true
+        run: pnpm audit --audit-level high
+
+      - name: Dependency review
+        if: github.event_name == 'pull_request'
+        uses: actions/dependency-review-action@v4

@@ -44,6 +44,7 @@ export default function PublisherPosts() {
   const utils = trpc.useUtils();
   const { t, dir, locale } = useI18n();
   const dashboard = trpc.publisher.dashboard.useQuery();
+  const unknownDeliveries = trpc.publisher.deliveryUnknown.useQuery();
   const [sourceName, setSourceName] = useState("all");
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
@@ -88,6 +89,15 @@ export default function PublisherPosts() {
     },
     onError: error => toast.error(error.message),
   });
+  const reconcile = trpc.publisher.reconcileDelivery.useMutation({
+    onSuccess: () => {
+      toast.success(t("posts.reconcileSaved"));
+      unknownDeliveries.refetch();
+      utils.publisher.dashboard.invalidate();
+      history.refetch();
+    },
+    onError: error => toast.error(error.message),
+  });
   const posts = history.data ?? [];
   const reviewPosts = dashboard.data?.reviewPosts ?? [];
   const sources = dashboard.data?.sources ?? [];
@@ -113,6 +123,11 @@ export default function PublisherPosts() {
       label: t("posts.statusDelivered"),
       icon: CheckCircle2,
       className: "bg-emerald-500/15 text-emerald-700 border-emerald-500/20",
+    },
+    delivery_unknown: {
+      label: t("posts.statusDeliveryUnknown"),
+      icon: CircleAlert,
+      className: "bg-orange-500/15 text-orange-800 border-orange-500/20",
     },
     failed: {
       label: t("posts.statusFailed"),
@@ -262,6 +277,52 @@ export default function PublisherPosts() {
             })}
           </CardContent>
         </Card>
+        {unknownDeliveries.data?.length ? (
+          <Card className="border-orange-200 bg-orange-50/40 shadow-sm">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <CircleAlert className="h-5 w-5 text-orange-600" />
+                {t("posts.reconcileTitle")}
+              </CardTitle>
+              <CardDescription>{t("posts.reconcileDesc")}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {unknownDeliveries.data.map(post => (
+                <article className="rounded-xl border border-orange-200 bg-white p-4" key={post.id}>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div>
+                      <p className="font-semibold text-slate-800">{post.title}</p>
+                      <p className="text-xs text-slate-500">{post.sourceName} · #{post.id}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={reconcile.isPending}
+                        onClick={() => {
+                          const messageId = window.prompt(t("posts.telegramMessagePrompt"));
+                          if (messageId?.trim()) reconcile.mutate({ id: post.id, delivered: true, telegramMessageId: messageId.trim() });
+                        }}
+                      >
+                        {t("posts.confirmDelivered")}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={reconcile.isPending}
+                        onClick={() => {
+                          if (window.confirm(t("posts.confirmNotDelivered"))) reconcile.mutate({ id: post.id, delivered: false });
+                        }}
+                      >
+                        {t("posts.returnToDraft")}
+                      </Button>
+                    </div>
+                  </div>
+                </article>
+              ))}
+            </CardContent>
+          </Card>
+        ) : null}
         <Card className="border-slate-200/80 shadow-sm">
           <CardHeader>
             <CardTitle className="text-lg">{t("posts.filterTitle")}</CardTitle>

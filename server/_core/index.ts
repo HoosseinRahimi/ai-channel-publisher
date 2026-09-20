@@ -52,11 +52,20 @@ async function startServer() {
   const app = express();
   const server = createServer(app);
   app.disable("x-powered-by");
-  // Configure body parser with larger size limit for file uploads
-  app.use(express.json({ limit: "50mb" }));
-  app.use(express.urlencoded({ limit: "50mb", extended: true }));
+  // No upload route currently exists. Keep public request bodies small and
+  // add a route-specific parser if uploads are introduced later.
+  app.use(express.json({ limit: "1mb" }));
+  app.use(express.urlencoded({ limit: "1mb", extended: true }));
   registerHealthRoute(app);
   registerSchedulerStatus(app, inProcessTasks);
+  app.use("/api/trpc", (req, res, next) => {
+    const origin = req.get("origin");
+    const forwardedProto = req.get("x-forwarded-proto")?.split(",")[0]?.trim();
+    const protocol = forwardedProto || req.protocol;
+    const expectedOrigin = `${protocol}://${req.get("host")}`;
+    if (req.method !== "GET" && origin && origin !== expectedOrigin) return res.status(403).json({ error: "invalid-origin" });
+    return next();
+  });
   app.post("/api/telegram/webhook", async (req, res) => {
     if (!isValidTelegramWebhookSecret(req.header("X-Telegram-Bot-Api-Secret-Token") ?? undefined)) return res.status(401).json({ error: "invalid-telegram-webhook-secret" });
     try {

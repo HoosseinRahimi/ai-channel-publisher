@@ -4,8 +4,8 @@ import { hashText, type TelegramReactionUpdate } from "./editorial";
 
 export function buildPublisherAnalytics(posts: Array<Pick<PublisherPost, "createdAt" | "deliveryStatus" | "sourceName" | "postKind" | "publishedAt">>, now = new Date()) {
   const delivered = posts.filter(post => post.deliveryStatus === "delivered");
-  const failed = posts.filter(post => post.deliveryStatus === "failed");
-  const attempted = posts.filter(post => ["delivered", "failed"].includes(post.deliveryStatus));
+  const failed = posts.filter(post => ["failed", "delivery_unknown"].includes(post.deliveryStatus));
+  const attempted = posts.filter(post => ["delivered", "failed", "delivery_unknown"].includes(post.deliveryStatus));
   const rangeStart = new Date(now);
   rangeStart.setUTCHours(0, 0, 0, 0);
   rangeStart.setUTCDate(rangeStart.getUTCDate() - 13);
@@ -20,16 +20,16 @@ export function buildPublisherAnalytics(posts: Array<Pick<PublisherPost, "create
     const bucket = dailyMap.get(key);
     if (!bucket) continue;
     if (post.deliveryStatus === "delivered") bucket.delivered += 1;
-    else if (post.deliveryStatus === "failed") bucket.failed += 1;
+    else if (["failed", "delivery_unknown"].includes(post.deliveryStatus)) bucket.failed += 1;
     else if (["draft", "held"].includes(post.deliveryStatus)) bucket.drafts += 1;
   }
   const sourceMap = new Map<string, { sourceName: string; delivered: number; failed: number; total: number }>();
   for (const post of posts) {
-    if (!["delivered", "failed"].includes(post.deliveryStatus)) continue;
+    if (!["delivered", "failed", "delivery_unknown"].includes(post.deliveryStatus)) continue;
     const current = sourceMap.get(post.sourceName) ?? { sourceName: post.sourceName, delivered: 0, failed: 0, total: 0 };
     current.total += 1;
     if (post.deliveryStatus === "delivered") current.delivered += 1;
-    if (post.deliveryStatus === "failed") current.failed += 1;
+    if (["failed", "delivery_unknown"].includes(post.deliveryStatus)) current.failed += 1;
     sourceMap.set(post.sourceName, current);
   }
   const postKinds = ["source", "explainer"] as const;
@@ -167,7 +167,7 @@ export function getCompletedWeekRange(now = new Date()) {
 
 export function buildWeeklyReportMarkdown(input: { periodStart: Date; periodEnd: Date; posts: Array<Pick<PublisherPost, "deliveryStatus" | "sourceName" | "postKind">>; engagement: Array<{ publisherPostId: number; reactionCount: number }> }) {
   const delivered = input.posts.filter(post => post.deliveryStatus === "delivered");
-  const failed = input.posts.filter(post => post.deliveryStatus === "failed");
+  const failed = input.posts.filter(post => ["failed", "delivery_unknown"].includes(post.deliveryStatus));
   const attempted = delivered.length + failed.length;
   const reactions = input.engagement.reduce((total, record) => total + record.reactionCount, 0);
   const sources = new Map<string, number>();

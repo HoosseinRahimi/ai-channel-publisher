@@ -22,6 +22,7 @@ export type WorkerEnv = {
   LLM_BASE_URL?: string;
   LLM_API_KEY?: string;
   LLM_MODEL?: string;
+  PUBLIC_BASE_URL?: string;
   // Client-friendly values (also inlined at Vite build time).
   VITE_APP_ID: string;
   // Optional feature flags.

@@ -55,6 +55,10 @@ wrangler secret put LLM_API_KEY
 Set the non-secret LLM endpoint/model in `wrangler.toml` or the Cloudflare
 dashboard as `LLM_BASE_URL` and `LLM_MODEL`.
 
+Set `PUBLIC_BASE_URL` to the deployed HTTPS origin before enabling Telegram
+engagement webhooks. Private or local source/provider URLs are rejected unless
+`ALLOW_PRIVATE_NETWORK_URLS=true` is deliberately configured.
+
 ## 4. Deploy
 
 ```bash

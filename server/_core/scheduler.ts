@@ -10,6 +10,40 @@ export type ScheduledTask = {
   run: () => Promise<unknown>;
 };
 
+type RuntimeTaskStatus = {
+  status: "idle" | "running" | "completed" | "failed";
+  lastStartedAt: string | null;
+  lastCompletedAt: string | null;
+  lastError: string | null;
+};
+
+const runtimeStatus = new Map<string, RuntimeTaskStatus>();
+
+function statusFor(task: ScheduledTask) {
+  const existing = runtimeStatus.get(task.name);
+  if (existing) return existing;
+  const initial: RuntimeTaskStatus = { status: "idle", lastStartedAt: null, lastCompletedAt: null, lastError: null };
+  runtimeStatus.set(task.name, initial);
+  return initial;
+}
+
+async function runScheduledTask(task: ScheduledTask) {
+  const state = statusFor(task);
+  state.status = "running";
+  state.lastStartedAt = new Date().toISOString();
+  state.lastError = null;
+  try {
+    await task.run();
+    state.status = "completed";
+  } catch (error) {
+    state.status = "failed";
+    state.lastError = error instanceof Error ? error.message : String(error);
+    console.error(`[scheduler] task ${task.name} failed:`, error);
+  } finally {
+    state.lastCompletedAt = new Date().toISOString();
+  }
+}
+
 /**
  * In-process cron scheduler for the self-hosted Node deployment. Enable it with
  * `ENABLE_INPROCESS_SCHEDULER=true`; each task calls the publisher service
@@ -23,6 +57,7 @@ export function startInProcessScheduler(tasks: ScheduledTask[]): () => void {
 
   const jobs: Array<ReturnType<typeof cronSchedule>> = [];
   for (const task of tasks) {
+    statusFor(task);
     if (!cronValidate(task.cronExpression)) {
       console.error(`[scheduler] invalid cron expression for ${task.name}: ${task.cronExpression}`);
       continue;
@@ -30,9 +65,7 @@ export function startInProcessScheduler(tasks: ScheduledTask[]): () => void {
     const job = cronSchedule(
       task.cronExpression,
       () => {
-        task.run().catch(error => {
-          console.error(`[scheduler] task ${task.name} failed:`, error);
-        });
+        void runScheduledTask(task);
       },
       { timezone: "UTC" }
     );
@@ -57,6 +90,7 @@ export function registerSchedulerStatus(app: Express, tasks: ScheduledTask[]) {
       tasks: tasks.map(task => ({
         name: task.name,
         cron: task.cronExpression,
+        runtime: statusFor(task),
       })),
     });
   });

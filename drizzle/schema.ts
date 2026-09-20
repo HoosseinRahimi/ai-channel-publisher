@@ -94,7 +94,7 @@ export const publisherPosts = mysqlTable(
     sourceUrlHash: varchar("sourceUrlHash", { length: 64 }),
     normalizedTopic: varchar("normalizedTopic", { length: 512 }).notNull(),
     contentFingerprint: varchar("contentFingerprint", { length: 64 }).notNull(),
-    deliveryStatus: mysqlEnum("deliveryStatus", ["draft", "held", "pending", "delivered", "failed", "skipped", "discarded"])
+    deliveryStatus: mysqlEnum("deliveryStatus", ["draft", "held", "pending", "delivered", "delivery_unknown", "failed", "skipped", "discarded"])
       .notNull()
       .default("pending"),
     telegramMessageId: varchar("telegramMessageId", { length: 64 }),
@@ -110,6 +110,24 @@ export const publisherPosts = mysqlTable(
     reviewIdx: index("publisher_posts_review_idx").on(table.deliveryStatus, table.scheduledFor),
     topicIdx: index("publisher_posts_topic_idx").on(table.normalizedTopic),
     sourceHashIdx: index("publisher_posts_source_hash_idx").on(table.sourceUrlHash),
+  })
+);
+
+export const publisherDeliveryAttempts = mysqlTable(
+  "publisher_delivery_attempts",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    publisherPostId: int("publisherPostId").notNull(),
+    attemptId: varchar("attemptId", { length: 64 }).notNull(),
+    status: mysqlEnum("status", ["sending", "delivered", "delivery_unknown", "failed", "skipped"]).notNull().default("sending"),
+    telegramMessageId: varchar("telegramMessageId", { length: 64 }),
+    errorMessage: text("errorMessage"),
+    startedAt: timestamp("startedAt").defaultNow().notNull(),
+    completedAt: timestamp("completedAt"),
+  },
+  table => ({
+    attemptIdx: uniqueIndex("publisher_delivery_attempt_id_uq").on(table.attemptId),
+    postIdx: index("publisher_delivery_attempt_post_idx").on(table.publisherPostId, table.startedAt),
   })
 );
 
