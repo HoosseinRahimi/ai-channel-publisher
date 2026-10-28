@@ -21,7 +21,7 @@ export const fa = {
     logout: "خروج",
     admin: "مدیر",
     channelAdmin: "مدیر کانال",
-    appSubtitle: "ناشر خودکار با هوش مصنوعی",
+    appSubtitle: "سامانهٔ انتشار هوشمند",
     language: "زبان",
     team: "تیم و دسترسی‌ها",
     audit: "گزارش فعالیت",

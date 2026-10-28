@@ -349,11 +349,6 @@ function DashboardLayoutContent({
             </div>
           </SidebarHeader>
           <SidebarContent className="px-2.5">
-            <p
-              className={`mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.18em] text-slate-400 group-data-[collapsible=icon]:hidden ${isRtl ? "text-right" : "text-left"}`}
-            >
-              {t("nav.appSubtitle")}
-            </p>
             <SidebarMenu className="gap-1.5">
               {menuItems.map(item => (
                 <SidebarMenuItem key={item.path}>

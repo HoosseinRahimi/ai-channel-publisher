@@ -2,6 +2,8 @@
 
 This guide shows two ways to evaluate AI Channel Publisher without risking accidental posts to a production channel.
 
+> **Preview:** see the [screenshot gallery](README.md#screenshots) for the dashboard, post log, analytics, team, and audit views.
+
 ## Demo A: dashboard-only local demo
 
 Use this path to inspect the application architecture, authentication, settings, source management, posts UI, and analytics screens without enabling AI generation or Telegram publishing.

@@ -23,7 +23,7 @@ export const de: Dictionary = {
     logout: "Abmelden",
     admin: "Admin",
     channelAdmin: "Kanal-Admin",
-    appSubtitle: "KI-gestützter Auto-Publisher",
+    appSubtitle: "KI-Publishing-System",
     language: "Sprache",
     team: "Team & Zugriff",
     audit: "Aktivitätsprotokoll",
@@ -48,7 +48,7 @@ export const de: Dictionary = {
   home: {
     heroKicker: "Publisher-Kontrollzentrale",
     heroTitle: "Autonomer KI-Nachrichten-Publisher",
-    heroDescription: "Ein {language}-Entwurf wird 30 Minuten vor der Veröffentlichung vorbereitet, damit Sie ihn prüfen oder bearbeiten können; anschließend wird er nach drei Stunden an {channel} gesendet.",
+    heroDescription: "Der Entwurf ({language}) wird 30 Minuten vor der Veröffentlichung vorbereitet, damit Sie ihn prüfen oder bearbeiten können; anschließend wird er im Drei-Stunden-Takt an {channel} gesendet.",
     automationOn: "Automatisierung aktiv",
     automationOff: "Automatisierung pausiert",
     statConnection: "Verbindungsstatus",

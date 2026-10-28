@@ -6,36 +6,62 @@
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org)
 [![React](https://img.shields.io/badge/React-19-61dafb.svg)](https://react.dev)
 
-A self-hosted AI publishing system for Telegram channels. It monitors news sources, turns selected stories into channel-ready drafts with an OpenAI-compatible model, gives the owner a review window, publishes approved content, and tracks engagement from Telegram.
+A self-hosted, review-first AI publishing system for Telegram channels. It watches your news sources, drafts channel-ready posts with any OpenAI-compatible model, and holds every draft for human approval before it reaches the channel.
 
-The project is built as a production-style full-stack application rather than a single bot script: React dashboard, typed tRPC API, Express backend, MySQL with Drizzle ORM, scheduled publishing, encrypted model credentials, Telegram webhooks, analytics, tests, and Docker deployment.
+<p align="center">
+  <img src="docs/screenshots/dashboard.png" alt="AI Channel Publisher dashboard" width="100%">
+</p>
 
-> AI Channel Publisher started as a channel-specific publisher and was later generalized so the channel, language, sources, model provider, and editorial instructions can all be configured without changing application code.
+<p align="center"><sub>Dashboard — publishing status, draft queue, and delivery health at a glance.</sub></p>
+
+[Screenshots](#screenshots) · [Features](#highlights) · [Quick start](#quick-start-with-docker-compose) · [Demo](DEMO.md) · [Deployment](DEPLOYMENT.md) · [Operations](OPERATIONS.md)
+
+## Overview
+
+AI Channel Publisher is a production-style full-stack application rather than a single bot script: a React dashboard, typed tRPC API, Express backend, MySQL with Drizzle ORM, scheduled publishing, encrypted model credentials, Telegram webhooks, engagement analytics, role-based access with an audit trail, automated tests, and Docker deployment.
+
+It started as a publisher for one specific channel and was later generalized so the channel, language, sources, model provider, and editorial voice are all configurable — no code changes required.
+
+## Screenshots
+
+| Post log | Analytics |
+| --- | --- |
+| <img src="docs/screenshots/posts.png" alt="Post log with delivered posts and thumbnails" width="480"> | <img src="docs/screenshots/analytics.png" alt="Engagement analytics" width="480"> |
+| **Team & access** | **Audit trail** |
+| <img src="docs/screenshots/team.png" alt="Admin accounts and role management" width="480"> | <img src="docs/screenshots/audit.png" alt="Admin activity log with filters" width="480"> |
+| **Settings** | **Mobile dashboard** |
+| <img src="docs/screenshots/settings.png" alt="Channel, model, and editorial settings" width="480"> | <img src="docs/screenshots/dashboard-mobile.png" alt="Responsive mobile dashboard" width="220"> |
+
+<p align="center">
+  <img src="docs/screenshots/login.png" alt="Secure sign-in screen" width="640">
+</p>
+
+> All screenshots come from a local demo instance seeded with fictional sources, posts, and engagement data. No production channel or real credentials are shown.
 
 ## What it does
 
 1. Fetches enabled news homepages and RSS/Atom feeds.
 2. Deduplicates candidate stories and parses media metadata.
-3. Uses an OpenAI-compatible LLM to generate a post with your editorial instructions and output language (with graceful JSON schema fallback for local models).
+3. Uses an OpenAI-compatible LLM to generate a post with your editorial instructions and output language, with a graceful JSON-schema fallback for local models.
 4. Saves the result as a draft before the scheduled publishing slot.
-5. Lets the owner edit, hold, approve, or publish immediately from the dashboard or via interactive Telegram Bot DM buttons.
+5. Lets the owner edit, hold, approve, or publish immediately from the dashboard or via interactive Telegram DM buttons.
 6. Sends approved posts through the Telegram Bot API with optional photo/media support.
 7. Receives Telegram reaction updates through a protected webhook and turns them into source and post analytics.
 
 ## Highlights
 
 - **Configurable channel**: change the Telegram channel, display name, signature, and output language from the dashboard.
-- **Bring your own model**: OpenAI, OpenRouter, Groq, Together, Ollama, LM Studio, or any OpenAI-compatible endpoint with automatic structured output fallback.
+- **Bring your own model**: OpenAI, OpenRouter, Groq, Together, Ollama, LM Studio, or any OpenAI-compatible endpoint with automatic structured-output fallback.
 - **Encrypted model credentials**: API keys saved from the UI are encrypted with AES-256-GCM and are never returned to the browser.
 - **Instruction Studio**: refine the standing editorial prompt with the same configured model before saving it.
 - **Multilingual UI**: Persian, English, and German with RTL/LTR switching.
 - **Multilingual publishing**: Persian, English, German, or a custom language defined by editorial guidance.
 - **Review-first automation**: drafts are prepared before each publishing slot and can be edited or held.
-- **1-Click Mobile Approval**: connected admins receive new draft previews directly in Telegram DM with inline `[Publish Now]`, `[Hold]`, and `[Discard]` buttons.
-- **Media & Hero Image support**: automatically extracts source images from enclosures and media tags to publish rich photo posts.
+- **1-click mobile approval**: connected admins receive draft previews in Telegram DM with inline `Publish now`, `Hold`, and `Discard` buttons.
+- **Media and hero images**: source images are extracted from enclosures and media tags to publish rich photo posts.
 - **Source management**: add RSS/Atom feeds or news pages, classify sources, and enable or disable them independently.
 - **Engagement intelligence**: reaction tracking, audience size, source comparison, alerts, CSV export, and weekly Markdown reports.
-- **Single-admin security model**: PBKDF2 password hashing plus JWT session cookies.
+- **Team access and audit**: owner, editor, and viewer roles backed by the database, with every admin mutation written to a sanitized audit trail.
 - **Self-hosted deployment**: Docker Compose with MySQL, or a Node/Express deployment with an external MySQL/TiDB database.
 
 ## Tech stack
@@ -49,7 +75,7 @@ The project is built as a production-style full-stack application rather than a 
 | AI | OpenAI-compatible Chat Completions API |
 | Publishing | Telegram Bot API |
 | Scheduling | `node-cron` in the self-hosted Node deployment |
-| Auth | PBKDF2 password verification, JWT session cookie |
+| Auth | PBKDF2 password verification, JWT session cookie, role-based procedures |
 | Deployment | Docker, Docker Compose, Caddy/nginx examples |
 | Validation | TypeScript checks and Vitest |
 
@@ -110,7 +136,7 @@ See **[DEMO.md](DEMO.md)** for two walkthroughs:
 - **Dashboard demo**: run the complete web application locally without sending Telegram posts.
 - **End-to-end demo**: connect a test Telegram channel and an OpenAI-compatible model, generate a draft, review it, publish it, and inspect the resulting analytics flow.
 
-## Quick setup with Docker Compose
+## Quick start with Docker Compose
 
 ### Prerequisites
 
@@ -136,9 +162,9 @@ cp .env.example .env
 For the bundled Compose MySQL service, make sure `.env` uses the Compose service hostname instead of `localhost`:
 
 ```env
-DATABASE_URL=mysql://publisher:change-me-publisher@mysql:3306/verborgene_schicht
+DATABASE_URL=mysql://publisher:change-me-publisher@mysql:3306/ai_channel_publisher
 MYSQL_ROOT_PASSWORD=change-me-root
-MYSQL_DATABASE=verborgene_schicht
+MYSQL_DATABASE=ai_channel_publisher
 MYSQL_USER=publisher
 MYSQL_PASSWORD=change-me-publisher
 ```
@@ -177,13 +203,7 @@ curl http://localhost:3000/api/health/live
 curl http://localhost:3000/api/health
 ```
 
-Then open:
-
-```text
-http://localhost:3000
-```
-
-Log in with `ADMIN_USERNAME` and the password used to generate `ADMIN_PASSWORD_HASH`.
+Then open `http://localhost:3000` and log in with `ADMIN_USERNAME` and the password used to generate `ADMIN_PASSWORD_HASH`.
 
 ## Enable AI generation
 
@@ -242,28 +262,22 @@ For reverse-proxy and service examples, see [`DEPLOYMENT.md`](DEPLOYMENT.md) and
 
 ## Admin roles and audit log
 
-The environment account (`ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH`) is the permanent
-**owner**. Owners can create additional database-backed admin accounts on the
-**Team & access** page; each account has its own username, PBKDF2 password and
-role.
+The environment account (`ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH`) is the permanent **owner**. Owners can create additional database-backed admin accounts on the **Team & access** page; each account has its own username, PBKDF2 password, and role.
 
 | Role | Can do |
 | --- | --- |
-| `owner` | Everything: drafts and publishing, sources and editorial guidance, channel/LLM settings, schedules, Telegram connection, account management and the audit log |
-| `editor` | Draft, edit, hold, discard and publish posts; manage sources, editorial guidance, analytics presets, weekly reports and alerts |
-| `viewer` | Read-only access to the dashboard, post log, analytics and settings overview |
+| `owner` | Everything: drafts and publishing, sources and editorial guidance, channel/LLM settings, schedules, Telegram connection, account management, and the audit log |
+| `editor` | Draft, edit, hold, discard and publish posts; manage sources, editorial guidance, analytics presets, weekly reports, and alerts |
+| `viewer` | Read-only access to the dashboard, post log, analytics, and settings overview |
 
 Guardrails that cannot be bypassed from the UI:
 
-- The environment owner stays active, keeps its role and keeps its reserved username.
+- The environment owner stays active, keeps its role, and keeps its reserved username.
 - Admins cannot change their own role or disable their own account.
 - The last active owner cannot be demoted or disabled.
 - Disabled accounts are rejected at session load, so access stops on the next request.
 
-Every mutation performed through an editor- or owner-gated endpoint is written to
-`admin_audit_log` with the actor, role, outcome and client IP, and with credentials
-(`password`, `token`, `apiKey`, …) redacted. Owners review and filter this trail on
-the **Audit trail** page.
+Every mutation performed through an editor- or owner-gated endpoint is written to `admin_audit_log` with the actor, role, outcome, and client IP, and with credentials (`password`, `token`, `apiKey`, …) redacted. Owners review and filter this trail on the **Audit trail** page.
 
 ## Important configuration
 
@@ -286,7 +300,7 @@ the **Audit trail** page.
 
 See [`.env.example`](.env.example) for the full template.
 
-## Repository structure
+## Project structure
 
 ```text
 client/                 React dashboard
@@ -312,11 +326,11 @@ server/                 active Express/tRPC backend
   routers.ts            application API routes
 
 drizzle/                MySQL schema and migrations
-scripts/                 migration and admin-password utilities
-deploy/                  Caddy and nginx examples
-cloudflare/              legacy Workers/D1 variant kept for reference
-Dockerfile               production application image
-docker-compose.yml       app + local MySQL stack
+scripts/                migration and admin-password utilities
+deploy/                 Caddy and nginx examples
+cloudflare/             legacy Workers/D1 variant kept for reference
+Dockerfile              production application image
+docker-compose.yml      app + local MySQL stack
 ```
 
 The Express/MySQL implementation under `server/` is the actively maintained deployment target. The `cloudflare/` implementation is retained as a legacy reference and is not expected to evolve in lockstep with the main backend.
