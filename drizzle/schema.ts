@@ -13,14 +13,40 @@ import {
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
   openId: varchar("openId", { length: 64 }).notNull().unique(),
+  username: varchar("username", { length: 64 }),
+  passwordHash: text("passwordHash"),
   name: text("name"),
   email: varchar("email", { length: 320 }),
   loginMethod: varchar("loginMethod", { length: 64 }),
-  role: mysqlEnum("role", ["user", "admin"]).default("user").notNull(),
+  role: mysqlEnum("role", ["owner", "editor", "viewer"]).default("viewer").notNull(),
+  isActive: boolean("isActive").notNull().default(true),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+}, table => ({
+  usernameIdx: uniqueIndex("users_username_uq").on(table.username),
+  roleIdx: index("users_role_idx").on(table.role, table.isActive),
+}));
+
+export const adminAuditLog = mysqlTable(
+  "admin_audit_log",
+  {
+    id: int("id").autoincrement().primaryKey(),
+    actorOpenId: varchar("actorOpenId", { length: 64 }),
+    actorName: varchar("actorName", { length: 160 }),
+    actorRole: varchar("actorRole", { length: 16 }),
+    action: varchar("action", { length: 120 }).notNull(),
+    outcome: mysqlEnum("outcome", ["success", "failure"]).notNull(),
+    detail: text("detail"),
+    ipAddress: varchar("ipAddress", { length: 64 }),
+    createdAt: timestamp("createdAt").defaultNow().notNull(),
+  },
+  table => ({
+    actorIdx: index("admin_audit_actor_idx").on(table.actorOpenId, table.createdAt),
+    actionIdx: index("admin_audit_action_idx").on(table.action, table.createdAt),
+    createdIdx: index("admin_audit_created_idx").on(table.createdAt),
+  })
+);
 
 export const publisherSettings = mysqlTable("publisher_settings", {
   id: int("id").autoincrement().primaryKey(),

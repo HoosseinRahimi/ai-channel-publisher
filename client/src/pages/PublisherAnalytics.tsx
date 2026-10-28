@@ -28,6 +28,7 @@ import {
 } from "@/lib/analytics";
 import { trpc } from "@/lib/trpc";
 import { useI18n } from "@/i18n";
+import { useRole } from "@/hooks/useRole";
 import {
   AlertCircle,
   BarChart3,
@@ -99,6 +100,7 @@ function Metric({
 export default function PublisherAnalytics() {
   const utils = trpc.useUtils();
   const { t, dir, locale } = useI18n();
+  const { isOwner, canEdit } = useRole();
   const analytics = trpc.publisher.analytics.useQuery();
   const reports = trpc.publisher.weeklyReports.useQuery();
   const engagementStatus = trpc.publisher.engagementStatus.useQuery();
@@ -228,21 +230,25 @@ export default function PublisherAnalytics() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex flex-wrap gap-3">
-                <Button
-                  onClick={() => generateReport.mutate()}
-                  disabled={generateReport.isPending}
-                >
-                  <Download className="h-4 w-4" />
-                  {t("analytics.generateThisWeek")}
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => enableWeekly.mutate()}
-                  disabled={enableWeekly.isPending}
-                >
-                  <Clock3 className="h-4 w-4" />
-                  {t("analytics.enableMonday")}
-                </Button>
+                {canEdit ? (
+                  <Button
+                    onClick={() => generateReport.mutate()}
+                    disabled={generateReport.isPending}
+                  >
+                    <Download className="h-4 w-4" />
+                    {t("analytics.generateThisWeek")}
+                  </Button>
+                ) : null}
+                {isOwner ? (
+                  <Button
+                    variant="outline"
+                    onClick={() => enableWeekly.mutate()}
+                    disabled={enableWeekly.isPending}
+                  >
+                    <Clock3 className="h-4 w-4" />
+                    {t("analytics.enableMonday")}
+                  </Button>
+                ) : null}
               </div>
               <div className="space-y-2">
                 {reportsList.length ? (
@@ -305,20 +311,22 @@ export default function PublisherAnalytics() {
                   {t("analytics.webhookSecretHint")}
                 </p>
               ) : null}
-              <Button
-                className="w-full"
-                variant={data?.engagement.enabled ? "outline" : "default"}
-                disabled={
-                  Boolean(data?.engagement.enabled) ||
-                  !engagementStatus.data?.configured
-                }
-                onClick={() => setEngagementConfirmOpen(true)}
-              >
-                <ShieldCheck className="h-4 w-4" />
-                {data?.engagement.enabled
-                  ? t("analytics.reactionsEnabled")
-                  : t("analytics.enableReactions")}
-              </Button>
+              {isOwner ? (
+                <Button
+                  className="w-full"
+                  variant={data?.engagement.enabled ? "outline" : "default"}
+                  disabled={
+                    Boolean(data?.engagement.enabled) ||
+                    !engagementStatus.data?.configured
+                  }
+                  onClick={() => setEngagementConfirmOpen(true)}
+                >
+                  <ShieldCheck className="h-4 w-4" />
+                  {data?.engagement.enabled
+                    ? t("analytics.reactionsEnabled")
+                    : t("analytics.enableReactions")}
+                </Button>
+              ) : null}
               <div className="space-y-2">
                 {(data?.engagement.topPosts ?? []).length ? (
                   data?.engagement.topPosts.map(post => (
@@ -593,31 +601,33 @@ export default function PublisherAnalytics() {
             </CardContent>
           </Card>
         </div>
-        <AlertDialog
-          open={engagementConfirmOpen}
-          onOpenChange={setEngagementConfirmOpen}
-        >
-          <AlertDialogContent dir={dir}>
-            <AlertDialogHeader>
-              <AlertDialogTitle>
-                {t("analytics.confirmWebhookTitle")}
-              </AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("analytics.confirmWebhookDesc")}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-              <AlertDialogAction
-                disabled={enableEngagement.isPending}
-                onClick={() => enableEngagement.mutate()}
-              >
-                <AlertCircle className="h-4 w-4" />
-                {t("analytics.enableReactions")}
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
+        {isOwner ? (
+          <AlertDialog
+            open={engagementConfirmOpen}
+            onOpenChange={setEngagementConfirmOpen}
+          >
+            <AlertDialogContent dir={dir}>
+              <AlertDialogHeader>
+                <AlertDialogTitle>
+                  {t("analytics.confirmWebhookTitle")}
+                </AlertDialogTitle>
+                <AlertDialogDescription>
+                  {t("analytics.confirmWebhookDesc")}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={enableEngagement.isPending}
+                  onClick={() => enableEngagement.mutate()}
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  {t("analytics.enableReactions")}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        ) : null}
       </div>
     </DashboardLayout>
   );

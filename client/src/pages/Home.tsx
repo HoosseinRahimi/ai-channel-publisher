@@ -23,6 +23,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { trpc } from "@/lib/trpc";
 import { useI18n } from "@/i18n";
+import { useRole } from "@/hooks/useRole";
 import { languageName } from "@/lib/postLanguages";
 import {
   Bot,
@@ -82,6 +83,7 @@ function StatCard({
 export default function Home() {
   const utils = trpc.useUtils();
   const { t, dir, locale } = useI18n();
+  const { isOwner, canEdit, isViewer } = useRole();
   const dashboard = trpc.publisher.dashboard.useQuery();
   const generateDraft = trpc.publisher.generateDraft.useMutation({
     onSuccess: () => {
@@ -161,6 +163,12 @@ export default function Home() {
             </div>
           }
         />
+
+        {isViewer ? (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            {t("roles.readOnly")}
+          </p>
+        ) : null}
 
         {dashboard.isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -244,60 +252,64 @@ export default function Home() {
                 </p>
               </div>
               <div className="flex flex-wrap gap-3">
-                {settings?.isEnabled ? (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button variant="outline" disabled={isBusy}>
-                        <Pause className="h-4 w-4" />
-                        {t("home.pauseAutomation")}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent dir={dir}>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {t("home.pauseTitle")}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {t("home.pauseDesc")}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>
-                          {t("common.cancel")}
-                        </AlertDialogCancel>
-                        <AlertDialogAction onClick={() => pause.mutate()}>
-                          {t("home.pauseAction")}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                {isOwner ? (
+                  settings?.isEnabled ? (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button variant="outline" disabled={isBusy}>
+                          <Pause className="h-4 w-4" />
+                          {t("home.pauseAutomation")}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent dir={dir}>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            {t("home.pauseTitle")}
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {t("home.pauseDesc")}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>
+                            {t("common.cancel")}
+                          </AlertDialogCancel>
+                          <AlertDialogAction onClick={() => pause.mutate()}>
+                            {t("home.pauseAction")}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  ) : (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button disabled={isBusy || !data?.tokenConfigured}>
+                          <Play className="h-4 w-4" />
+                          {t("home.enableAutomation")}
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent dir={dir}>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            {t("home.enableTitle")}
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            {t("home.enableDesc")}
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>
+                            {t("common.cancel")}
+                          </AlertDialogCancel>
+                          <AlertDialogAction onClick={() => enable.mutate()}>
+                            {t("home.enableAction")}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )
                 ) : (
-                  <AlertDialog>
-                    <AlertDialogTrigger asChild>
-                      <Button disabled={isBusy || !data?.tokenConfigured}>
-                        <Play className="h-4 w-4" />
-                        {t("home.enableAutomation")}
-                      </Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent dir={dir}>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle>
-                          {t("home.enableTitle")}
-                        </AlertDialogTitle>
-                        <AlertDialogDescription>
-                          {t("home.enableDesc")}
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>
-                          {t("common.cancel")}
-                        </AlertDialogCancel>
-                        <AlertDialogAction onClick={() => enable.mutate()}>
-                          {t("home.enableAction")}
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                  <Badge variant="outline">{t("roles.ownerOnly")}</Badge>
                 )}
                 <Button asChild variant="ghost">
                   <a href="/posts">{t("home.reviewDrafts")}</a>
@@ -324,42 +336,52 @@ export default function Home() {
                   <li>• {t("home.controlPublish")}</li>
                 </ul>
               </div>
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={isBusy || !data?.tokenConfigured}
-                onClick={() => generateDraft.mutate()}
-              >
-                <FilePenLine className="h-4 w-4" />
-                {t("home.generateDraft")}
-              </Button>
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
+              {canEdit ? (
+                <>
                   <Button
+                    variant="outline"
                     className="w-full"
                     disabled={isBusy || !data?.tokenConfigured}
+                    onClick={() => generateDraft.mutate()}
                   >
-                    <Radio className="h-4 w-4" />
-                    {t("home.publishNowAction")}
+                    <FilePenLine className="h-4 w-4" />
+                    {t("home.generateDraft")}
                   </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent dir={dir}>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("home.publishNowTitle")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("home.publishNowDesc")}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => publishNow.mutate()}>
-                      {t("home.publishNowAction")}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
+                  <AlertDialog>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        className="w-full"
+                        disabled={isBusy || !data?.tokenConfigured}
+                      >
+                        <Radio className="h-4 w-4" />
+                        {t("home.publishNowAction")}
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent dir={dir}>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>
+                          {t("home.publishNowTitle")}
+                        </AlertDialogTitle>
+                        <AlertDialogDescription>
+                          {t("home.publishNowDesc")}
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>
+                          {t("common.cancel")}
+                        </AlertDialogCancel>
+                        <AlertDialogAction onClick={() => publishNow.mutate()}>
+                          {t("home.publishNowAction")}
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                </>
+              ) : (
+                <p className="rounded-xl bg-white p-3 text-sm leading-6 text-slate-600">
+                  {t("roles.readOnly")}
+                </p>
+              )}
               <a
                 href="/posts"
                 className="flex items-center justify-center gap-1 text-sm text-indigo-600 hover:underline"

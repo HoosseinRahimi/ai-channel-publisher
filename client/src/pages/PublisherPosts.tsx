@@ -27,6 +27,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useI18n } from "@/i18n";
+import { useRole } from "@/hooks/useRole";
 import {
   CheckCircle2,
   CircleAlert,
@@ -59,6 +60,7 @@ function PostThumbnail({ src }: { src: string }) {
 export default function PublisherPosts() {
   const utils = trpc.useUtils();
   const { t, dir, locale } = useI18n();
+  const { canEdit, isViewer } = useRole();
   const dashboard = trpc.publisher.dashboard.useQuery();
   const unknownDeliveries = trpc.publisher.deliveryUnknown.useQuery();
   const [sourceName, setSourceName] = useState("all");
@@ -171,6 +173,11 @@ export default function PublisherPosts() {
           description={t("posts.heroDesc")}
           icon={FileText}
         />
+        {isViewer ? (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            {t("roles.readOnly")}
+          </p>
+        ) : null}
         <Card className="border-violet-200 bg-violet-50/40 shadow-sm">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -219,81 +226,89 @@ export default function PublisherPosts() {
                       {post.sourceName}
                     </span>
                   </div>
-                  <Textarea
-                    aria-label={`${t("posts.pendingTitle")} — ${post.sourceName}`}
-                    value={value}
-                    onChange={event =>
-                      setEditing(current => ({
-                        ...current,
-                        [post.id]: event.target.value,
-                      }))
-                    }
-                    className="min-h-72 resize-y font-sans leading-7"
-                  />
-                  <div className="mt-4 flex flex-wrap gap-2">
-                    <Button
-                      variant="outline"
-                      onClick={() =>
-                        saveDraft.mutate({ id: post.id, content: value })
-                      }
-                      disabled={saveDraft.isPending}
-                    >
-                      {t("posts.saveEdit")}
-                    </Button>
-                    <Button
-                      variant={held ? "outline" : "secondary"}
-                      onClick={() =>
-                        holdDraft.mutate({ id: post.id, held: !held })
-                      }
-                      disabled={holdDraft.isPending}
-                    >
-                      {held ? t("posts.release") : t("posts.hold")}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      className="text-rose-600 hover:text-rose-700"
-                      onClick={() => discard.mutate({ id: post.id })}
-                      disabled={discard.isPending}
-                    >
-                      {t("posts.archive")}
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button disabled={publish.isPending}>
-                          <Send className="h-4 w-4" />
-                          {t("posts.publishNow")}
+                  {canEdit ? (
+                    <>
+                      <Textarea
+                        aria-label={`${t("posts.pendingTitle")} — ${post.sourceName}`}
+                        value={value}
+                        onChange={event =>
+                          setEditing(current => ({
+                            ...current,
+                            [post.id]: event.target.value,
+                          }))
+                        }
+                        className="min-h-72 resize-y font-sans leading-7"
+                      />
+                      <div className="mt-4 flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          onClick={() =>
+                            saveDraft.mutate({ id: post.id, content: value })
+                          }
+                          disabled={saveDraft.isPending}
+                        >
+                          {t("posts.saveEdit")}
                         </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent dir={dir}>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            {t("posts.confirmPublishTitle")}
-                          </AlertDialogTitle>
-                          <AlertDialogDescription>
-                            {t("posts.confirmPublishDesc", {
-                              channel: channelHandle,
-                            })}
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>
-                            {t("common.cancel")}
-                          </AlertDialogCancel>
-                          <AlertDialogAction
-                            onClick={() => publish.mutate({ id: post.id })}
-                          >
-                            {t("posts.publishAction")}
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                        <Button
+                          variant={held ? "outline" : "secondary"}
+                          onClick={() =>
+                            holdDraft.mutate({ id: post.id, held: !held })
+                          }
+                          disabled={holdDraft.isPending}
+                        >
+                          {held ? t("posts.release") : t("posts.hold")}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          className="text-rose-600 hover:text-rose-700"
+                          onClick={() => discard.mutate({ id: post.id })}
+                          disabled={discard.isPending}
+                        >
+                          {t("posts.archive")}
+                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button disabled={publish.isPending}>
+                              <Send className="h-4 w-4" />
+                              {t("posts.publishNow")}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent dir={dir}>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                {t("posts.confirmPublishTitle")}
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                {t("posts.confirmPublishDesc", {
+                                  channel: channelHandle,
+                                })}
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>
+                                {t("common.cancel")}
+                              </AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => publish.mutate({ id: post.id })}
+                              >
+                                {t("posts.publishAction")}
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </div>
+                    </>
+                  ) : (
+                    <p className="whitespace-pre-wrap text-sm leading-7 text-slate-700">
+                      {value}
+                    </p>
+                  )}
                 </article>
               );
             })}
           </CardContent>
         </Card>
-        {unknownDeliveries.data?.length ? (
+        {canEdit && unknownDeliveries.data?.length ? (
           <Card className="border-orange-200 bg-orange-50/40 shadow-sm">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">

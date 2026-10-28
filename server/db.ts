@@ -56,6 +56,15 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 
     textFields.forEach(assignNullable);
 
+    if (user.username !== undefined) {
+      const username = user.username?.trim().toLowerCase() ?? null;
+      values.username = username;
+      updateSet.username = username;
+    }
+    if (user.isActive !== undefined) {
+      values.isActive = user.isActive;
+      updateSet.isActive = user.isActive;
+    }
     if (user.lastSignedIn !== undefined) {
       values.lastSignedIn = user.lastSignedIn;
       updateSet.lastSignedIn = user.lastSignedIn;
@@ -64,8 +73,8 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = user.role;
       updateSet.role = user.role;
     } else if (user.openId === ENV.adminUserId) {
-      values.role = 'admin';
-      updateSet.role = 'admin';
+      values.role = 'owner';
+      updateSet.role = 'owner';
     }
 
     if (!values.lastSignedIn) {

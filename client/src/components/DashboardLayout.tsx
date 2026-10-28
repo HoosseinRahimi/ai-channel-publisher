@@ -22,14 +22,17 @@ import {
 } from "@/components/ui/sidebar";
 import { trpc } from "@/lib/trpc";
 import { useI18n, LANGUAGES } from "@/i18n";
+import { useRole } from "@/hooks/useRole";
 import {
   BarChart3,
   BookOpenText,
   Languages,
   LayoutDashboard,
   LogOut,
+  ScrollText,
   Settings2,
   Sparkles,
+  Users,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
@@ -202,6 +205,7 @@ function DashboardLayoutContent({
   setSidebarWidth: (value: number) => void;
 }) {
   const { user, logout } = useAuth();
+  const { isOwner } = useRole();
   const { t, dir } = useI18n();
   const dashboard = trpc.publisher.dashboard.useQuery();
   const appName =
@@ -221,6 +225,12 @@ function DashboardLayoutContent({
     { icon: BarChart3, label: t("nav.analytics"), path: "/analytics" },
     { icon: BookOpenText, label: t("nav.posts"), path: "/posts" },
     { icon: Settings2, label: t("nav.settings"), path: "/settings" },
+    ...(isOwner
+      ? [
+          { icon: Users, label: t("nav.team"), path: "/team" },
+          { icon: ScrollText, label: t("nav.audit"), path: "/audit" },
+        ]
+      : []),
   ];
   const activeItem =
     menuItems.find(item => item.path === location) ?? menuItems[0];
@@ -325,7 +335,7 @@ function DashboardLayoutContent({
                       {user?.name || t("nav.admin")}
                     </p>
                     <p className="truncate text-xs text-slate-500">
-                      {t("nav.channelAdmin")}
+                      {user?.role ? t(`roles.${user.role}`) : t("nav.channelAdmin")}
                     </p>
                   </div>
                 </button>

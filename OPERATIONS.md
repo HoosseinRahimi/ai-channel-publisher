@@ -68,3 +68,21 @@ per-process:
 - Run `pnpm check`, `pnpm test`, `pnpm build`, and the Cloudflare typecheck before
   release. `pnpm audit --prod --audit-level high` must pass; the full audit is
   also recorded in CI for development-toolchain advisories.
+
+## Admin accounts and audit trail
+
+- The environment owner (`ADMIN_USERNAME` / `ADMIN_PASSWORD_HASH`) is immutable
+  from the dashboard and always keeps the `owner` role. Use it for initial setup
+  and recovery.
+- Additional admins are managed on **Team & access**. The server refuses to
+  remove the last active owner, to change an admin's own role or access, and to
+  touch the environment owner.
+- Deactivating an account takes effect on its next request because sessions are
+  resolved against the `users` table every time.
+- `admin_audit_log` records every editor/owner mutation plus login and logout
+  events. Suspect credentials were exposed in an input? The stored `detail` is
+  sanitized (`password`, `token`, `apiKey`, `hash`, `authorization`, `cookie`),
+  but rotate the secret anyway.
+- The audit table grows with every mutation. Purge or archive rows older than
+  your retention window with a scheduled SQL job if the table gets large; the
+  Audit page supports date filters, so recent history stays usable.

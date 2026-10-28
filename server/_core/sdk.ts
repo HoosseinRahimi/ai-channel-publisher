@@ -53,7 +53,7 @@ class SDKServer {
     const session = await this.verifySession(sessionToken);
     if (!session || session.appId !== ENV.appId) throw ForbiddenError("Invalid session cookie");
     const user = await db.getUserByOpenId(session.openId);
-    if (!user) throw ForbiddenError("User not found");
+    if (!user || !user.isActive) throw ForbiddenError("User not found");
     const lastSignedIn = user.lastSignedIn ? new Date(user.lastSignedIn).getTime() : 0;
     if (!lastSignedIn || Date.now() - lastSignedIn > SESSION_TOUCH_INTERVAL_MS) {
       await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });

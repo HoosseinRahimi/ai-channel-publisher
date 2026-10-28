@@ -240,6 +240,31 @@ curl http://localhost:3000/api/health
 
 For reverse-proxy and service examples, see [`DEPLOYMENT.md`](DEPLOYMENT.md) and [`deploy/`](deploy/).
 
+## Admin roles and audit log
+
+The environment account (`ADMIN_USERNAME` + `ADMIN_PASSWORD_HASH`) is the permanent
+**owner**. Owners can create additional database-backed admin accounts on the
+**Team & access** page; each account has its own username, PBKDF2 password and
+role.
+
+| Role | Can do |
+| --- | --- |
+| `owner` | Everything: drafts and publishing, sources and editorial guidance, channel/LLM settings, schedules, Telegram connection, account management and the audit log |
+| `editor` | Draft, edit, hold, discard and publish posts; manage sources, editorial guidance, analytics presets, weekly reports and alerts |
+| `viewer` | Read-only access to the dashboard, post log, analytics and settings overview |
+
+Guardrails that cannot be bypassed from the UI:
+
+- The environment owner stays active, keeps its role and keeps its reserved username.
+- Admins cannot change their own role or disable their own account.
+- The last active owner cannot be demoted or disabled.
+- Disabled accounts are rejected at session load, so access stops on the next request.
+
+Every mutation performed through an editor- or owner-gated endpoint is written to
+`admin_audit_log` with the actor, role, outcome and client IP, and with credentials
+(`password`, `token`, `apiKey`, …) redacted. Owners review and filter this trail on
+the **Audit trail** page.
+
 ## Important configuration
 
 | Variable | Required | Purpose |
@@ -247,8 +272,9 @@ For reverse-proxy and service examples, see [`DEPLOYMENT.md`](DEPLOYMENT.md) and
 | `VITE_APP_ID` | yes | App identifier used to namespace sessions/cookies |
 | `JWT_SECRET` | yes | Signs admin session JWTs |
 | `DATABASE_URL` | yes | MySQL/TiDB connection string |
-| `ADMIN_USERNAME` | yes | Dashboard administrator username |
-| `ADMIN_PASSWORD_HASH` | yes | PBKDF2 password hash |
+| `ADMIN_USERNAME` | yes | Username of the environment owner account |
+| `ADMIN_PASSWORD_HASH` | yes | PBKDF2 password hash for the environment owner |
+| `ADMIN_DISPLAY_NAME` | optional | Display name shown for the environment owner |
 | `TELEGRAM_BOT_TOKEN` | publishing | Telegram bot credentials |
 | `TELEGRAM_CHANNEL_HANDLE` | publishing | Initial channel target, also editable in UI |
 | `TELEGRAM_WEBHOOK_SECRET` | analytics | Protects Telegram webhook requests |
@@ -264,11 +290,14 @@ See [`.env.example`](.env.example) for the full template.
 
 ```text
 client/                 React dashboard
-  src/pages/            dashboard, posts, analytics, settings
+  src/pages/            dashboard, posts, analytics, settings, team, audit
   src/components/       feature and UI components
 
 server/                 active Express/tRPC backend
   _core/                auth, env, LLM client, scheduler, health, crypto
+    adminAuth.ts        credential verification and session-safe user payloads
+    adminAccounts.ts    admin account CRUD with owner/last-owner guardrails
+    auditLog.ts         paginated audit trail and credential redaction
   publisher/            publisher domain modules
     pipeline.ts         source fetching, draft generation, delivery state machine
     settings.ts         settings row, schedules, LLM configuration
@@ -314,6 +343,8 @@ pnpm build     # production client + server build
 - Put production deployments behind HTTPS.
 - Rotate a Telegram token or LLM key immediately if it is ever exposed.
 - Use strong, unique values for `JWT_SECRET`, `SETTINGS_SECRET`, database passwords, and webhook secrets.
+- Give each operator the narrowest admin role that lets them do their job; reserve `owner` for people who need credentials and account control.
+- Review the audit trail after granting or revoking access so unexpected activity is caught early.
 - Verify both health endpoints before enabling the scheduler in production.
 
 ## Current limitations
@@ -330,7 +361,6 @@ pnpm build     # production client + server build
 - AI-generated header images
 - Calendar-based scheduling queue
 - More export/report delivery options
-- Multiple administrators and roles
 - Per-source post templates
 - Fully localized reports and alerts
 

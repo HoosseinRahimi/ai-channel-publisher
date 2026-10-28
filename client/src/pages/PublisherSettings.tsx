@@ -16,6 +16,7 @@ import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { trpc } from "@/lib/trpc";
 import { useI18n } from "@/i18n";
+import { useRole } from "@/hooks/useRole";
 import { POST_LANGUAGE_OPTIONS } from "@/lib/postLanguages";
 import {
   CheckCircle2,
@@ -429,6 +430,7 @@ function LlmSettingsCard() {
 export default function PublisherSettings() {
   const utils = trpc.useUtils();
   const { t, dir } = useI18n();
+  const { isOwner, canEdit, isViewer } = useRole();
   const dashboard = trpc.publisher.dashboard.useQuery();
   const sources = dashboard.data?.sources ?? [];
   const settings = dashboard.data?.settings;
@@ -526,6 +528,12 @@ export default function PublisherSettings() {
           icon={ShieldCheck}
         />
 
+        {isViewer ? (
+          <p className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600">
+            {t("roles.readOnly")}
+          </p>
+        ) : null}
+
         <Card className="border-slate-200/80 shadow-sm">
           <CardHeader>
             <div className="flex items-start justify-between gap-4">
@@ -561,14 +569,15 @@ export default function PublisherSettings() {
           </CardContent>
         </Card>
 
-        <GeneralSettingsCard />
+        {isOwner ? <GeneralSettingsCard /> : null}
 
-        <LlmSettingsCard />
+        {isOwner ? <LlmSettingsCard /> : null}
 
-        <InstructionStudio />
+        {canEdit ? <InstructionStudio /> : null}
 
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card>
+        <div className={canEdit ? "grid gap-6 lg:grid-cols-2" : "grid gap-6"}>
+          {canEdit ? (
+            <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
                 <MessageSquareText className="h-5 w-5 text-violet-600" />
@@ -623,7 +632,8 @@ export default function PublisherSettings() {
                 {t("settings.saveEditorial")}
               </Button>
             </CardContent>
-          </Card>
+            </Card>
+          ) : null}
           <Card className="bg-slate-50">
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-lg">
@@ -649,6 +659,7 @@ export default function PublisherSettings() {
             <CardDescription>{t("settings.sourcesDesc")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
+            {canEdit ? (
             <div className="rounded-xl border border-slate-200 bg-slate-50 p-5">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h2 className="font-semibold text-slate-900">
@@ -735,6 +746,7 @@ export default function PublisherSettings() {
                 )}
               </Button>
             </div>
+            ) : null}
             <div className="space-y-2">
               {sources.map(source => (
                 <div
@@ -773,6 +785,7 @@ export default function PublisherSettings() {
                       </p>
                     </div>
                   </div>
+                  {canEdit ? (
                   <div className="flex shrink-0 flex-wrap gap-2">
                     <Button asChild variant="ghost" size="sm">
                       <a
@@ -809,6 +822,7 @@ export default function PublisherSettings() {
                         : t("common.activate")}
                     </Button>
                   </div>
+                  ) : null}
                 </div>
               ))}
             </div>
