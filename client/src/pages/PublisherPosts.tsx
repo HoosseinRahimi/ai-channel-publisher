@@ -40,6 +40,22 @@ import {
 import { useMemo, useState } from "react";
 import { toast } from "sonner";
 
+function PostThumbnail({ src }: { src: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <img
+      src={src}
+      alt=""
+      loading="lazy"
+      decoding="async"
+      referrerPolicy="no-referrer"
+      onError={() => setFailed(true)}
+      className="h-20 w-20 shrink-0 rounded-lg border border-slate-200 object-cover"
+    />
+  );
+}
+
 export default function PublisherPosts() {
   const utils = trpc.useUtils();
   const { t, dir, locale } = useI18n();
@@ -428,12 +444,19 @@ export default function PublisherPosts() {
                             {new Date(post.createdAt).toLocaleString(locale)}
                           </time>
                         </div>
-                        <h2 className="mt-4 text-base font-bold text-slate-900">
-                          {post.title}
-                        </h2>
-                        <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-600">
-                          {post.content}
-                        </p>
+                        <div className="mt-4 flex items-start gap-3">
+                          {post.imageUrl ? (
+                            <PostThumbnail src={post.imageUrl} />
+                          ) : null}
+                          <div className="min-w-0 flex-1">
+                            <h2 className="text-base font-bold text-slate-900">
+                              {post.title}
+                            </h2>
+                            <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-600">
+                              {post.content}
+                            </p>
+                          </div>
+                        </div>
                         <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-slate-100 pt-3 text-xs text-slate-500">
                           <span>
                             {t("posts.sourceLabel", { name: post.sourceName })}
