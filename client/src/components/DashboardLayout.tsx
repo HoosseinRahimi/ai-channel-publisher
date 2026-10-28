@@ -19,6 +19,7 @@ import {
   SidebarMenuItem,
   SidebarProvider,
   SidebarTrigger,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { trpc } from "@/lib/trpc";
 import { useI18n, LANGUAGES } from "@/i18n";
@@ -26,16 +27,20 @@ import { useRole } from "@/hooks/useRole";
 import {
   BarChart3,
   BookOpenText,
+  Eye,
+  EyeOff,
   Languages,
   LayoutDashboard,
+  LoaderCircle,
   LogOut,
   ScrollText,
   Settings2,
+  ShieldCheck,
   Sparkles,
   Users,
 } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
-import { useLocation } from "wouter";
+import { Link, useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from "./DashboardLayoutSkeleton";
 
 const SIDEBAR_WIDTH_KEY = "publisher-sidebar-width";
@@ -76,6 +81,7 @@ function LocalLoginCard() {
   const { t, dir } = useI18n();
   const [username, setUsername] = useState("admin");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const login = trpc.auth.login.useMutation({
     onSuccess: async () => {
       setPassword("");
@@ -103,7 +109,10 @@ function LocalLoginCard() {
               {t("login.description")}
             </p>
           </div>
-          <div className="h-px bg-slate-700" />
+          <div className="flex items-center gap-2 text-xs text-slate-400">
+            <ShieldCheck className="h-4 w-4 text-emerald-400" />
+            {t("login.secureNote")}
+          </div>
         </div>
         <form onSubmit={submit} className="p-7 sm:p-10" dir={dir}>
           <div className="mb-9 flex items-center justify-between">
@@ -127,6 +136,10 @@ function LocalLoginCard() {
                 value={username}
                 onChange={event => setUsername(event.target.value)}
                 autoComplete="username"
+                autoCapitalize="none"
+                spellCheck={false}
+                autoFocus
+                dir="ltr"
                 className="mt-2"
               />
             </label>
@@ -134,17 +147,45 @@ function LocalLoginCard() {
               className={`block text-sm font-semibold text-slate-700 ${dir === "rtl" ? "text-right" : "text-left"}`}
             >
               {t("login.password")}
-              <Input
-                value={password}
-                onChange={event => setPassword(event.target.value)}
-                type="password"
-                autoComplete="current-password"
-                className="mt-2"
-              />
+              <div className="relative mt-2">
+                <Input
+                  value={password}
+                  onChange={event => setPassword(event.target.value)}
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  aria-describedby="login-password-hint"
+                  aria-invalid={Boolean(login.error)}
+                  dir="ltr"
+                  className="pe-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(current => !current)}
+                  aria-label={
+                    showPassword ? t("login.hidePassword") : t("login.showPassword")
+                  }
+                  className="absolute inset-y-0 end-0 flex w-11 items-center justify-center rounded-e-xl text-slate-400 transition-colors hover:text-slate-700 focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-none"
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4" />
+                  ) : (
+                    <Eye className="h-4 w-4" />
+                  )}
+                </button>
+              </div>
             </label>
+            <p
+              id="login-password-hint"
+              className="text-xs leading-5 text-slate-500"
+            >
+              {t("login.passwordHint")}
+            </p>
           </div>
           {login.error ? (
-            <p className="mt-4 rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+            <p
+              role="alert"
+              className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm text-rose-700"
+            >
               {t("login.error")}
             </p>
           ) : null}
@@ -154,8 +195,15 @@ function LocalLoginCard() {
             disabled={login.isPending || password.length < 12}
             className="mt-7 w-full"
           >
+            {login.isPending ? (
+              <LoaderCircle className="h-4 w-4 animate-spin" />
+            ) : null}
             {login.isPending ? t("login.submitting") : t("login.submit")}
           </Button>
+          <p className="mt-5 flex items-center gap-2 text-xs leading-5 text-slate-500 lg:hidden">
+            <ShieldCheck className="h-4 w-4 shrink-0 text-emerald-600" />
+            {t("login.secureNote")}
+          </p>
         </form>
       </div>
     </div>
@@ -170,10 +218,14 @@ function LanguageSwitcher({ compact = false }: { compact?: boolean }) {
         <Button
           variant={compact ? "outline" : "ghost"}
           size={compact ? "sm" : "default"}
-          className={compact ? "" : "w-full justify-start gap-2"}
+          className={
+            compact
+              ? ""
+              : "w-full justify-start gap-2 group-data-[collapsible=icon]:w-9 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:px-0"
+          }
         >
           <Languages className="h-4 w-4" />
-          <span>
+          <span className={compact ? "" : "group-data-[collapsible=icon]:hidden"}>
             {compact
               ? LANGUAGES.find(language => language.code === lang)?.label
               : t("nav.language")}
@@ -207,6 +259,7 @@ function DashboardLayoutContent({
   const { user, logout } = useAuth();
   const { isOwner } = useRole();
   const { t, dir } = useI18n();
+  const { isMobile, setOpenMobile } = useSidebar();
   const dashboard = trpc.publisher.dashboard.useQuery();
   const appName =
     dashboard.data?.settings?.appName?.trim() || "AI Channel Publisher";
@@ -268,6 +321,12 @@ function DashboardLayoutContent({
   };
   return (
     <>
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:start-4 focus:top-4 focus:z-[60] focus:rounded-lg focus:bg-violet-600 focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-white focus:shadow-lg"
+      >
+        {t("nav.skipToContent")}
+      </a>
       <div className="relative" ref={sidebarRef}>
         <Sidebar
           side={isRtl ? "right" : "left"}
@@ -300,7 +359,11 @@ function DashboardLayoutContent({
                 <SidebarMenuItem key={item.path}>
                   <SidebarMenuButton
                     isActive={location === item.path}
-                    onClick={() => setLocation(item.path)}
+                    aria-current={location === item.path ? "page" : undefined}
+                    onClick={() => {
+                      setLocation(item.path);
+                      if (isMobile) setOpenMobile(false);
+                    }}
                     tooltip={item.label}
                     className={`relative h-11 rounded-lg px-3 font-medium transition-colors data-[active=true]:bg-violet-50 data-[active=true]:text-violet-800 ${isRtl ? "text-right" : "text-left"}`}
                   >
@@ -308,6 +371,7 @@ function DashboardLayoutContent({
                     <span>{item.label}</span>
                     {location === item.path ? (
                       <span
+                        aria-hidden="true"
                         className={`absolute h-5 w-1 rounded-full bg-violet-600 ${isRtl ? "right-0" : "left-0"}`}
                       />
                     ) : null}
@@ -327,7 +391,7 @@ function DashboardLayoutContent({
                 >
                   <Avatar className="h-9 w-9">
                     <AvatarFallback className="bg-violet-100 text-xs font-bold text-violet-700">
-                      {user?.name?.charAt(0).toUpperCase()}
+                      {user?.name?.charAt(0).toUpperCase() ?? "A"}
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1 group-data-[collapsible=icon]:hidden">
@@ -350,13 +414,14 @@ function DashboardLayoutContent({
           </SidebarFooter>
         </Sidebar>
         <button
-          aria-label="Resize sidebar"
+          aria-label={t("nav.resizeSidebar")}
           aria-orientation="vertical"
           aria-valuemax={MAX_WIDTH}
           aria-valuemin={MIN_WIDTH}
           aria-valuenow={sidebarWidth}
+          aria-valuetext={t("nav.sidebarWidth", { width: sidebarWidth })}
           role="separator"
-          className={`absolute top-0 z-20 h-full w-1 cursor-col-resize transition-colors hover:bg-violet-300/70 ${isRtl ? "left-0" : "right-0"}`}
+          className={`absolute top-0 z-20 h-full w-1 cursor-col-resize transition-colors hover:bg-violet-300/70 focus-visible:bg-violet-400 focus-visible:outline-none ${isRtl ? "left-0" : "right-0"}`}
           onMouseDown={() => setIsResizing(true)}
           onKeyDown={resizeWithKeyboard}
         />
@@ -367,7 +432,10 @@ function DashboardLayoutContent({
         <header className="sticky top-0 z-30 border-b border-slate-200 bg-white">
           <div className="flex h-16 items-center justify-between gap-4 px-4 sm:px-7">
             <div className="flex min-w-0 items-center gap-3">
-              <SidebarTrigger className="h-9 w-9 rounded-xl border border-slate-200 bg-white shadow-sm lg:hidden" />
+              <SidebarTrigger
+                aria-label={t("nav.openMenu")}
+                className="h-9 w-9 rounded-xl border border-slate-200 bg-white shadow-sm lg:hidden"
+              />
               <div className="min-w-0">
                 <p className="truncate text-sm font-bold text-slate-900">
                   {activeItem.label}
@@ -377,8 +445,10 @@ function DashboardLayoutContent({
                 </p>
               </div>
             </div>
-            <div
-              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold ${automationEnabled ? "border-emerald-200 bg-emerald-50 text-emerald-700" : "border-slate-200 bg-slate-50 text-slate-600"}`}
+            <Link
+              href="/"
+              title={t("home.scheduleTitle")}
+              className={`flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-none ${automationEnabled ? "border-emerald-200 bg-emerald-50 text-emerald-700 hover:border-emerald-300 hover:bg-emerald-100" : "border-slate-200 bg-slate-50 text-slate-600 hover:border-slate-300 hover:bg-slate-100"}`}
             >
               <span
                 aria-hidden="true"
@@ -387,10 +457,14 @@ function DashboardLayoutContent({
               {automationEnabled
                 ? t("home.automationOn")
                 : t("home.automationOff")}
-            </div>
+            </Link>
           </div>
         </header>
-        <main className="min-h-[calc(100vh-4rem)] p-4 sm:p-7 lg:p-8">
+        <main
+          id="main-content"
+          tabIndex={-1}
+          className="min-h-[calc(100vh-4rem)] p-4 focus:outline-none sm:p-7 lg:p-8"
+        >
           {children}
         </main>
       </SidebarInset>

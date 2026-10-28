@@ -71,13 +71,21 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-width: thin;
+    scrollbar-color: oklch(0.86 0.015 275) transparent;
   }
   html {
     scroll-behavior: smooth;
   }
+  @media (prefers-reduced-motion: reduce) {
+    html {
+      scroll-behavior: auto;
+    }
+  }
   body {
     @apply bg-slate-50 text-foreground antialiased;
     min-width: 320px;
+    text-rendering: optimizeLegibility;
     font-family:
       Inter,
       ui-sans-serif,
@@ -89,6 +97,11 @@
   }
   ::selection {
     @apply bg-violet-200 text-violet-950;
+  }
+  button,
+  [role="button"],
+  a {
+    -webkit-tap-highlight-color: transparent;
   }
   button:not(:disabled),
   [role="button"]:not([aria-disabled="true"]),

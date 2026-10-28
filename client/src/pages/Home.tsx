@@ -35,10 +35,12 @@ import {
   Pause,
   Play,
   Radio,
+  RotateCw,
   Send,
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { Link } from "wouter";
 import { toast } from "sonner";
 
 function StatCard({
@@ -61,18 +63,18 @@ function StatCard({
         ? "bg-amber-500/10 text-amber-700"
         : "bg-indigo-500/10 text-indigo-700";
   return (
-    <Card className="border-slate-200/80 shadow-sm">
+    <Card className="border-slate-200/80 shadow-sm transition-shadow hover:shadow-md">
       <CardContent className="p-5">
-        <div className="flex items-start justify-between">
-          <div>
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
             <p className="text-sm text-slate-500">{label}</p>
-            <p className="mt-2 text-xl font-bold tracking-tight text-slate-950">
+            <p className="mt-2 truncate text-2xl font-bold tracking-tight tabular-nums text-slate-950">
               {value}
             </p>
             <p className="mt-1.5 text-xs leading-5 text-slate-500">{detail}</p>
           </div>
-          <div className={`rounded-lg p-3 ${color}`}>
-            <Icon className="h-5 w-5" />
+          <div className={`shrink-0 rounded-xl p-3 ${color}`}>
+            <Icon aria-hidden="true" className="h-5 w-5" />
           </div>
         </div>
       </CardContent>
@@ -170,13 +172,45 @@ export default function Home() {
           </p>
         ) : null}
 
+        {dashboard.isError ? (
+          <Card className="border-rose-200 bg-rose-50/60 shadow-sm">
+            <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-rose-100 p-2.5 text-rose-700">
+                  <CircleAlert aria-hidden="true" className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-rose-950">
+                    {t("home.loadErrorTitle")}
+                  </p>
+                  <p className="mt-1 text-sm leading-6 text-rose-900/80">
+                    {t("home.loadErrorDesc")}
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                className="shrink-0"
+                onClick={() => dashboard.refetch()}
+                disabled={dashboard.isFetching}
+              >
+                <RotateCw
+                  aria-hidden="true"
+                  className={dashboard.isFetching ? "h-4 w-4 animate-spin" : "h-4 w-4"}
+                />
+                {t("common.retry")}
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
+
         {dashboard.isLoading ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {[1, 2, 3, 4].map(item => (
               <Skeleton className="h-36" key={item} />
             ))}
           </div>
-        ) : (
+        ) : dashboard.isError ? null : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <StatCard
               label={t("home.statConnection")}
@@ -195,21 +229,21 @@ export default function Home() {
             />
             <StatCard
               label={t("home.statDelivered")}
-              value={String(delivered)}
+              value={delivered.toLocaleString(locale)}
               detail={t("home.statDeliveredDetail")}
               icon={Send}
               tone="emerald"
             />
             <StatCard
               label={t("home.statPending")}
-              value={String(drafts)}
+              value={drafts.toLocaleString(locale)}
               detail={t("home.statPendingDetail")}
               icon={FilePenLine}
               tone={drafts ? "amber" : "indigo"}
             />
             <StatCard
               label={t("home.statErrors")}
-              value={String(failed)}
+              value={failed.toLocaleString(locale)}
               detail={t("home.statErrorsDetail")}
               icon={CircleAlert}
               tone={failed ? "amber" : "emerald"}
@@ -312,7 +346,7 @@ export default function Home() {
                   <Badge variant="outline">{t("roles.ownerOnly")}</Badge>
                 )}
                 <Button asChild variant="ghost">
-                  <a href="/posts">{t("home.reviewDrafts")}</a>
+                  <Link href="/posts">{t("home.reviewDrafts")}</Link>
                 </Button>
               </div>
             </CardContent>
@@ -382,12 +416,12 @@ export default function Home() {
                   {t("roles.readOnly")}
                 </p>
               )}
-              <a
+              <Link
                 href="/posts"
-                className="flex items-center justify-center gap-1 text-sm text-indigo-600 hover:underline"
+                className="flex items-center justify-center gap-1 rounded-lg py-1 text-sm font-medium text-indigo-600 hover:underline focus-visible:ring-4 focus-visible:ring-ring/30 focus-visible:outline-none"
               >
-                {t("home.viewPosts")} <ExternalLink className="h-3.5 w-3.5" />
-              </a>
+                {t("home.viewPosts")} <ExternalLink aria-hidden="true" className="h-3.5 w-3.5" />
+              </Link>
             </CardContent>
           </Card>
         </div>
