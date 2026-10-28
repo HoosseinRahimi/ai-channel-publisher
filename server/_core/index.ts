@@ -10,7 +10,7 @@ import { assertRequiredEnv } from "./env";
 import { describeEnvironment, registerHealthRoute } from "./health";
 import { INSTANCE_ID } from "./instance";
 import { registerSchedulerStatus, startInProcessScheduler, type ScheduledTask } from "./scheduler";
-import { serveStatic, setupVite } from "./vite";
+import { serveStatic } from "./static";
 
 /**
  * Tasks the in-process scheduler runs when `ENABLE_INPROCESS_SCHEDULER=true`.
@@ -86,6 +86,8 @@ async function startServer() {
   );
   // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
+    // Vite is a devDependency; keep the production bundle free of it.
+    const { setupVite } = await import("./vite");
     await setupVite(app, server);
   } else {
     serveStatic(app);
