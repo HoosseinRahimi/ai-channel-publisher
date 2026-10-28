@@ -1,6 +1,6 @@
 import { createHmac, timingSafeEqual } from "crypto";
 import { eq } from "drizzle-orm";
-import { getDb } from "../db";
+import { getDb, requireDb } from "../db";
 import { publisherSettings } from "../../drizzle/schema";
 import { telegramChannelSetupError } from "./editorial";
 
@@ -32,7 +32,7 @@ export function parseManagedCallbackData(value: string, now = Math.floor(Date.no
 export async function getChannelHandle() {
   const db = await getDb();
   if (db) {
-    const settings = (await db.select({ channelHandle: publisherSettings.channelHandle }).from(publisherSettings).limit(1))[0];
+    const settings = (await db.select({ channelHandle: publisherSettings.channelHandle }).from(publisherSettings).orderBy(publisherSettings.id).limit(1))[0];
     if (settings?.channelHandle) return settings.channelHandle;
   }
   return process.env.TELEGRAM_CHANNEL_HANDLE?.trim() || "@your_channel";
@@ -116,54 +116,76 @@ export async function fetchTelegramChannelAudienceSize() {
   return payload.result;
 }
 
-export async function deliverToTelegram(content: string, options?: { imageUrl?: string | null }) {
+/** Telegram caps photo captions at 1024 characters; longer copy is sent as a reply. */
+const TELEGRAM_CAPTION_LIMIT = 1024;
+
+/**
+ * Thrown when the photo reached the channel but the full-text follow-up failed.
+ * Publishing treats this as `delivery_unknown` (never auto-retried) because the
+ * channel now holds a partially delivered post.
+ */
+export class TelegramPartialDeliveryError extends Error {
+  readonly telegramMessageId: string;
+
+  constructor(telegramMessageId: string, detail: string) {
+    super(`Telegram published the photo, but the full text follow-up failed: ${detail}`);
+    this.name = "TelegramPartialDeliveryError";
+    this.telegramMessageId = telegramMessageId;
+  }
+}
+
+function telegramDeliveryError(channelHandle: string, detail: string) {
+  if (/not a member|chat not found|not enough rights|not allowed|forbidden/i.test(detail)) {
+    return new Error(telegramChannelSetupError(channelHandle, detail));
+  }
+  return new Error(`Delivering to Telegram failed: ${detail}`);
+}
+
+async function sendTextFollowUp(token: string, chatId: string, text: string, replyToMessageId: string) {
+  const response = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, text, reply_to_message_id: replyToMessageId }),
+    signal: AbortSignal.timeout(20000),
+  });
+  const result = await response.json().catch(() => null) as { ok?: boolean; description?: string } | null;
+  if (!response.ok || !result?.ok) throw new Error(result?.description || `Telegram request failed (${response.status}).`);
+}
+
+export async function deliverToTelegram(content: string, options: { imageUrl?: string | null } = {}) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("The Telegram bot token is not configured.");
   const channelHandle = await getChannelHandle();
 
-  if (options?.imageUrl && /^https?:\/\//i.test(options.imageUrl)) {
+  if (options.imageUrl && /^https?:\/\//i.test(options.imageUrl)) {
+    let photoMessageId: string | null = null;
     try {
-      const photoPayload: Record<string, unknown> = {
-        chat_id: channelHandle,
-        photo: options.imageUrl,
-      };
-      if (content.length <= 1024) {
-        photoPayload.caption = content;
-      }
+      const caption = content.length <= TELEGRAM_CAPTION_LIMIT ? content : undefined;
       const photoResponse = await fetch(`https://api.telegram.org/bot${token}/sendPhoto`, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify(photoPayload),
+        body: JSON.stringify({ chat_id: channelHandle, photo: options.imageUrl, ...(caption ? { caption } : {}) }),
         signal: AbortSignal.timeout(20000),
       });
-      const photoResult = (await photoResponse.json().catch(() => null)) as {
+      const photoResult = await photoResponse.json().catch(() => null) as {
         ok?: boolean;
         result?: { message_id?: number };
       } | null;
-
-      if (photoResult?.ok && photoResult.result?.message_id) {
-        // If content exceeded Telegram photo caption limit (1024 chars), follow up with the full text
-        if (content.length > 1024) {
-          const textResponse = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              chat_id: channelHandle,
-              text: content,
-              reply_to_message_id: photoResult.result.message_id,
-            }),
-            signal: AbortSignal.timeout(20000),
-          });
-          const textResult = (await textResponse.json().catch(() => null)) as {
-            ok?: boolean;
-            result?: { message_id?: number };
-          } | null;
-          return String(textResult?.result?.message_id ?? photoResult.result.message_id);
-        }
-        return String(photoResult.result.message_id);
+      if (photoResponse.ok && photoResult?.ok && photoResult.result?.message_id) {
+        photoMessageId = String(photoResult.result.message_id);
       }
     } catch {
-      // Photo sending failed or timed out; fall through to standard sendMessage
+      // Telegram could not fetch or accept the image; fall back to a text-only post.
+    }
+
+    if (photoMessageId) {
+      if (content.length <= TELEGRAM_CAPTION_LIMIT) return photoMessageId;
+      try {
+        await sendTextFollowUp(token, channelHandle, content, photoMessageId);
+      } catch (error) {
+        throw new TelegramPartialDeliveryError(photoMessageId, error instanceof Error ? error.message : String(error));
+      }
+      return photoMessageId;
     }
   }
 
@@ -175,11 +197,7 @@ export async function deliverToTelegram(content: string, options?: { imageUrl?: 
   });
   const result = await response.json().catch(() => null) as { ok?: boolean; result?: { message_id?: number }; description?: string } | null;
   if (!response.ok || !result?.ok) {
-    const detail = result?.description || `Telegram request failed (${response.status}).`;
-    if (/not a member|chat not found|not enough rights|not allowed|forbidden/i.test(detail)) {
-      throw new Error(telegramChannelSetupError(channelHandle, detail));
-    }
-    throw new Error(`Delivering to Telegram failed: ${detail}`);
+    throw telegramDeliveryError(channelHandle, result?.description || `Telegram request failed (${response.status}).`);
   }
   return String(result.result?.message_id ?? "");
 }
@@ -215,6 +233,10 @@ export async function verifyTelegramChannelAccess() {
   return { channel: channelHandle, status: member.status };
 }
 
+export function isValidTelegramTokenConfigured() {
+  return Boolean(process.env.TELEGRAM_BOT_TOKEN);
+}
+
 export function isTelegramEngagementConfigured() {
   return Boolean(process.env.TELEGRAM_BOT_TOKEN && process.env.TELEGRAM_WEBHOOK_SECRET);
 }
@@ -228,7 +250,6 @@ export function isValidTelegramWebhookSecret(value: string | undefined) {
 }
 
 export async function dbUpdateEngagementWebhookEnabled(settingsId: number, enabled: boolean) {
-  const db = await getDb();
-  if (!db) throw new Error("Database is unavailable.");
+  const db = await requireDb();
   await db.update(publisherSettings).set({ engagementWebhookEnabled: enabled }).where(eq(publisherSettings.id, settingsId));
 }

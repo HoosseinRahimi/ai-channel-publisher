@@ -6,8 +6,8 @@ const mocks = vi.hoisted(() => ({
   deleted: 0,
 }));
 
-vi.mock("./db", () => ({
-  getDb: vi.fn(async () => ({
+vi.mock("./db", () => {
+  const database = {
     select: () => ({
       from: () => ({
         where: () => ({
@@ -25,8 +25,9 @@ vi.mock("./db", () => ({
     delete: () => ({
       where: async () => { mocks.deleted += 1; },
     }),
-  })),
-}));
+  };
+  return { getDb: vi.fn(async () => database), requireDb: vi.fn(async () => database) };
+});
 
 import { deleteAnalyticsPreset, listAnalyticsPresets, saveAnalyticsPreset } from "./publisher";
 

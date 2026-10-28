@@ -120,15 +120,14 @@ WantedBy=multi-user.target
 
 ## 5. Verify the deployment
 
-1. `GET /api/health` → `{ "ok": true, "status": "ok", ... }`; 503 when the DB
-   is unreachable.
+1. `GET /api/health` → `{ "ok": true, "status": "ready", ... }`; 503 with
+   `"status": "degraded"` when the DB is unreachable.
 2. `GET /api/health/live` → always 200 (liveness).
 3. `GET /api/scheduled/status` → lists the in-process scheduler tasks when
    `ENABLE_INPROCESS_SCHEDULER=true`.
 4. Log in as the owner → dashboard renders with the seeded default sources.
 5. In the dashboard, **generate a draft**, review it, **save tone feedback**,
-   then **send one test post** (`publishNextPost` with `isTest`) to confirm
-   Telegram delivers.
+   then **publish it from the posts page** to confirm Telegram delivers.
 6. Enable the engagement webhook from the UI
    (`configureTelegramEngagementWebhook`) so reaction tracking works.
 7. Confirm the weekly report / low-engagement alerts arrive at the connected

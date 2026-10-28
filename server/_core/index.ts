@@ -4,10 +4,11 @@ import { createServer } from "http";
 import net from "net";
 import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { appRouter } from "../routers";
-import { autoPublishReadyDraft, evaluateLowEngagementAlerts, generateDraftForReview, generateWeeklyPerformanceReport, handleTelegramWebhookUpdate, isValidTelegramWebhookSecret } from "../publisher";
+import { autoPublishReadyDraft, DRAFT_CRON, ENGAGEMENT_ALERT_CRON, evaluateLowEngagementAlerts, generateDraftForReview, generateWeeklyPerformanceReport, handleTelegramWebhookUpdate, isValidTelegramWebhookSecret, PUBLISH_CRON, WEEKLY_REPORT_CRON } from "../publisher";
 import { createContext } from "./context";
 import { assertRequiredEnv } from "./env";
 import { describeEnvironment, registerHealthRoute } from "./health";
+import { INSTANCE_ID } from "./instance";
 import { registerSchedulerStatus, startInProcessScheduler, type ScheduledTask } from "./scheduler";
 import { serveStatic, setupVite } from "./vite";
 
@@ -16,10 +17,10 @@ import { serveStatic, setupVite } from "./vite";
  * The run-key guard keeps these tasks idempotent across restarts.
  */
 const inProcessTasks: ScheduledTask[] = [
-  { name: "draft", cronExpression: "0 30 2-23/3 * * *", run: () => generateDraftForReview({}) },
-  { name: "publish", cronExpression: "0 0 */3 * * *", run: () => autoPublishReadyDraft() },
-  { name: "weekly-report", cronExpression: "0 0 8 * * 1", run: () => generateWeeklyPerformanceReport() },
-  { name: "engagement-alerts", cronExpression: "0 0 10 * * *", run: () => evaluateLowEngagementAlerts() },
+  { name: "draft", cronExpression: DRAFT_CRON, run: () => generateDraftForReview({}) },
+  { name: "publish", cronExpression: PUBLISH_CRON, run: () => autoPublishReadyDraft() },
+  { name: "weekly-report", cronExpression: WEEKLY_REPORT_CRON, run: () => generateWeeklyPerformanceReport() },
+  { name: "engagement-alerts", cronExpression: ENGAGEMENT_ALERT_CRON, run: () => evaluateLowEngagementAlerts() },
 ];
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -103,7 +104,7 @@ async function startServer() {
   server.listen(port, () => {
     console.log(
       `[boot] ${describeEnvironment().mode} server listening on http://localhost:${port}/ ` +
-      `(telegram=${describeEnvironment().telegramConfigured ? "configured" : "missing"})`
+      `(instance=${INSTANCE_ID}, telegram=${describeEnvironment().telegramConfigured ? "configured" : "missing"})`
     );
   });
 

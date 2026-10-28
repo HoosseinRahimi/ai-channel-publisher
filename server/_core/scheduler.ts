@@ -1,5 +1,6 @@
 import { schedule as cronSchedule, validate as cronValidate } from "node-cron";
 import type { Express } from "express";
+import { INSTANCE_ID } from "./instance";
 
 export type ScheduledTask = {
   /** Stable identifier used for logs and idempotency. */
@@ -51,9 +52,11 @@ async function runScheduledTask(task: ScheduledTask) {
  */
 export function startInProcessScheduler(tasks: ScheduledTask[]): () => void {
   if (process.env.ENABLE_INPROCESS_SCHEDULER !== "true") {
-    console.log("[scheduler] in-process scheduler disabled (ENABLE_INPROCESS_SCHEDULER != true)");
+    console.log("[scheduler] in-process scheduler disabled on this instance (ENABLE_INPROCESS_SCHEDULER != true)");
     return () => undefined;
   }
+
+  console.log(`[scheduler] in-process cron enabled for ${INSTANCE_ID}; keep it enabled on exactly one replica.`);
 
   const jobs: Array<ReturnType<typeof cronSchedule>> = [];
   for (const task of tasks) {
@@ -85,8 +88,14 @@ export function startInProcessScheduler(tasks: ScheduledTask[]): () => void {
  */
 export function registerSchedulerStatus(app: Express, tasks: ScheduledTask[]) {
   app.get("/api/scheduled/status", (_req, res) => {
+    const enabled = process.env.ENABLE_INPROCESS_SCHEDULER === "true";
     res.json({
-      enabled: process.env.ENABLE_INPROCESS_SCHEDULER === "true",
+      enabled,
+      instanceId: INSTANCE_ID,
+      scope: "process",
+      note: enabled
+        ? "This cron only runs on this instance. If you run replicas, keep ENABLE_INPROCESS_SCHEDULER=true on exactly one of them."
+        : null,
       tasks: tasks.map(task => ({
         name: task.name,
         cron: task.cronExpression,

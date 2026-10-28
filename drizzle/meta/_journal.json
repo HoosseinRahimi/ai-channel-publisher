@@ -78,6 +78,20 @@
       "when": 1789920001000,
       "tag": "0010_delivery_attempts",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1793212830679,
+      "tag": "0011_publisher_posts_message_index",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1793213797382,
+      "tag": "0012_publisher_posts_image_url",
+      "breakpoints": true
     }
   ]
 }

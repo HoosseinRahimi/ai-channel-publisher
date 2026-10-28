@@ -37,6 +37,28 @@ reconciliation” and the admin API provides `publisher.deliveryUnknown` and
 confirm a Telegram message ID or return the post to `draft` after checking that
 Telegram did not receive it.
 
+## Multi-replica deployments
+
+The application is designed for one application instance. It can run behind a
+load balancer with several replicas, but some state is intentionally
+per-process:
+
+- **Scheduler**: `ENABLE_INPROCESS_SCHEDULER=true` starts cron jobs inside the
+  process. When running replicas, enable it on **exactly one** replica and set
+  it to `false` elsewhere. Publishing state itself lives in MySQL, and the run
+  key on `publisher_runs` plus the `draft|held → pending` claim in
+  `publishDraft` prevent duplicate posts, but two schedulers would still spend
+  duplicate LLM calls on draft generation.
+- **Metrics**: `/api/health` reports counters for the process that answered the
+  request (`metricsScope: "process"`). They reset on restart and are not summed
+  across replicas; scrape each replica or aggregate in your monitoring system.
+- **Login rate limiting**: failures are tracked in memory per IP and username.
+  With N replicas an attacker gets roughly N attempts per window, so keep the
+  dashboard off the public internet or add rate limiting at the reverse proxy.
+- **Instance identity**: health and `/api/scheduled/status` return an
+  `instanceId` (`hostname:pid` by default). Set `INSTANCE_ID` to a stable value
+  per replica so logs and probes are easy to correlate.
+
 ## Required deployment settings
 
 - Set `PUBLIC_BASE_URL` to the deployed HTTPS origin before enabling Telegram

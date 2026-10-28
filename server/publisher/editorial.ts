@@ -1,14 +1,12 @@
-import { createHash, randomUUID } from "crypto";
+import { createHash } from "crypto";
 import type { PublisherPost, PublisherSource } from "../../drizzle/schema";
-import { draftFallbackTitle, keyPointsHeading, impactHeading, PERSIAN_EDITORIAL_PROMPT, type PostLanguage } from "./languages";
+import { draftFallbackTitle, keyPointsHeading, impactHeading, type PostLanguage } from "./languages";
 
 export const DEFAULT_CHANNEL_HANDLE = "@your_channel";
 export const PUBLISH_CRON = "0 0 */3 * * *";
 export const DRAFT_CRON = "0 30 2-23/3 * * *";
 export const WEEKLY_REPORT_CRON = "0 0 8 * * 1";
 export const ENGAGEMENT_ALERT_CRON = "0 0 10 * * *";
-/** Backwards-compatible alias; the live prompt is built per language in ./languages.ts. */
-export const PERSIAN_EDITORIAL_SYSTEM_PROMPT = PERSIAN_EDITORIAL_PROMPT;
 
 export const DEFAULT_SOURCES = [
   { name: "OpenAI News", homepage: "https://openai.com/news/", feedUrl: "https://openai.com/news/rss.xml", sourceKind: "primary" as const },
@@ -66,11 +64,6 @@ export function matchesDuplicate(
     || (Boolean(keys.normalizedTopic) && post.normalizedTopic === keys.normalizedTopic)
     || (Boolean(keys.contentFingerprint) && post.contentFingerprint === keys.contentFingerprint)
   );
-}
-
-export function buildRunKey(options: { isTest: boolean; taskUid?: string; now?: number }) {
-  if (options.isTest) return `manual-${randomUUID()}`;
-  return `${options.taskUid ?? "schedule"}-${Math.floor((options.now ?? Date.now()) / (3 * 60 * 60 * 1000))}`;
 }
 
 export function telegramChannelSetupError(channelHandle: string, detail?: string) {
@@ -285,10 +278,6 @@ export function titleFromContent(content: string, language: PostLanguage = "fa")
 
 export function isReviewableDraftStatus(status: PublisherPost["deliveryStatus"]) {
   return status === "draft" || status === "held";
-}
-
-export function isPublishedHistoryStatus(status: PublisherPost["deliveryStatus"]) {
-  return status === "delivered";
 }
 
 export function normalizeEditedDraftContent(content: string, signature: string) {

@@ -1,6 +1,7 @@
 import type { Express } from "express";
 import { getDb } from "../db";
 import { ENV } from "./env";
+import { INSTANCE_ID, PROCESS_STARTED_AT } from "./instance";
 import { snapshotPublisherMetrics } from "./metrics";
 
 /**
@@ -10,6 +11,9 @@ import { snapshotPublisherMetrics } from "./metrics";
  * - `liveness`  — process is up. Always 200 when the server is listening.
  * - `readiness` — process is up AND its database connection resolves. Reports
  *   503 so a scheduler/orchestrator can route traffic away during DB outages.
+ *
+ * Metrics are collected per process and reset on restart; they are not
+ * aggregated across replicas.
  */
 export function registerHealthRoute(app: Express) {
   app.get("/api/health", async (_req, res) => {
@@ -18,6 +22,8 @@ export function registerHealthRoute(app: Express) {
       ok: dbAvailable,
       status: dbAvailable ? "ready" : "degraded",
       service: "verborgene-schicht-publisher",
+      instance: { id: INSTANCE_ID, startedAt: PROCESS_STARTED_AT },
+      metricsScope: "process" as const,
       time: new Date().toISOString(),
       metrics: snapshotPublisherMetrics(),
     };
@@ -26,7 +32,7 @@ export function registerHealthRoute(app: Express) {
 
   // Trivial liveness endpoint for probes that should never touch the DB.
   app.get("/api/health/live", (_req, res) => {
-    res.status(200).json({ ok: true, status: "alive" });
+    res.status(200).json({ ok: true, status: "alive", instanceId: INSTANCE_ID });
   });
 }
 

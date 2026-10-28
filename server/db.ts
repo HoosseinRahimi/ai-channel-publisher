@@ -19,6 +19,13 @@ export async function getDb() {
   return _db;
 }
 
+/** Same as getDb(), but fails loudly for service code that cannot run without a database. */
+export async function requireDb() {
+  const db = await getDb();
+  if (!db) throw new Error("Database is unavailable.");
+  return db;
+}
+
 export async function upsertUser(user: InsertUser): Promise<void> {
   if (!user.openId) {
     throw new Error("User openId is required for upsert");

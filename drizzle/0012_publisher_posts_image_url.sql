@@ -1,0 +1,1 @@
+ALTER TABLE `publisher_posts` ADD `imageUrl` varchar(2048);

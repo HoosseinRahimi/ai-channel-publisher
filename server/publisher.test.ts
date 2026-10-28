@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allowsScheduledPublisherRun, buildDailySourcePerformanceTrend, buildEngagementAnalytics, buildManagedCallbackData, buildPublisherAnalytics, buildRunKey, buildSourceEngagementComparison, buildSourceLowEngagementCandidates, buildTelegramRecipientCode, buildWeeklyReportDeliveryUpdate, buildWeeklyReportMarkdown, calculateEngagementRateBps, canAutoPublishDraft, canDeliverWeeklyReport, decodeXmlEntities, DRAFT_CRON, extractCandidates, getCompletedWeekRange, getSourceAlertWeekRange, hashText, isAuthorizedTelegramCallback, isLowEngagement, isPublishedHistoryStatus, isReviewableDraftStatus, isTelegramEngagementConfigured, isValidTelegramRecipientCode, isValidTelegramTokenConfigured, isValidTelegramWebhookSecret, matchesDuplicate, normalizeAnalyticsPresetName, normalizeEditedDraftContent, normalizeEditorialGuidance, normalizeEngagementThresholdBps, normalizeSourcePerformanceFilters, normalizeTopic, outputMatchesLanguage, parseManagedCallbackData, PERSIAN_EDITORIAL_SYSTEM_PROMPT, PUBLISH_CRON, renderChannelPost, selectLatestWeeklyReport, stripMarkup, summarizeTelegramReactions, telegramChannelSetupError, titleFromContent, validatePublisherSource, WEEKLY_REPORT_CRON } from "./publisher";
+import { allowsScheduledPublisherRun, buildDailySourcePerformanceTrend, buildEngagementAnalytics, buildManagedCallbackData, buildPublisherAnalytics, buildSourceEngagementComparison, buildSourceLowEngagementCandidates, buildTelegramRecipientCode, buildWeeklyReportDeliveryUpdate, buildWeeklyReportMarkdown, calculateEngagementRateBps, canAutoPublishDraft, canDeliverWeeklyReport, decodeXmlEntities, DRAFT_CRON, extractCandidates, getCompletedWeekRange, getSourceAlertWeekRange, hashText, isAuthorizedTelegramCallback, isLowEngagement, isReviewableDraftStatus, isTelegramEngagementConfigured, isValidTelegramRecipientCode, isValidTelegramTokenConfigured, isValidTelegramWebhookSecret, matchesDuplicate, normalizeAnalyticsPresetName, normalizeEditedDraftContent, normalizeEditorialGuidance, normalizeEngagementThresholdBps, normalizeSourcePerformanceFilters, normalizeTopic, outputMatchesLanguage, parseManagedCallbackData, PERSIAN_EDITORIAL_PROMPT, PUBLISH_CRON, renderChannelPost, selectLatestWeeklyReport, stripMarkup, summarizeTelegramReactions, telegramChannelSetupError, titleFromContent, validatePublisherSource, WEEKLY_REPORT_CRON } from "./publisher";
 
 describe("publisher utilities", () => {
   it("normalizes a topic deterministically for duplicate checks", () => {
@@ -85,14 +85,6 @@ describe("publisher utilities", () => {
     expect(matchesDuplicate(published, { sourceUrlHash: "new-url", normalizedTopic: "new topic", contentFingerprint: "new-content" })).toBe(false);
   });
 
-  it("creates one deterministic run key per scheduled three-hour slot", () => {
-    const first = buildRunKey({ isTest: false, taskUid: "task-1", now: 10_800_000 });
-    const retry = buildRunKey({ isTest: false, taskUid: "task-1", now: 10_800_001 });
-    const next = buildRunKey({ isTest: false, taskUid: "task-1", now: 21_600_000 });
-    expect(first).toBe(retry);
-    expect(next).not.toBe(first);
-  });
-
   it("turns Telegram channel permission failures into a useful setup instruction", () => {
     const message = telegramChannelSetupError("@TestChannel", "Forbidden: bot is not a member of the channel chat");
     expect(message).toContain("@TestChannel");
@@ -101,10 +93,10 @@ describe("publisher utilities", () => {
   });
 
   it("defines a natural Persian editorial voice without instructing the model to repeat UI headings", () => {
-    expect(PERSIAN_EDITORIAL_SYSTEM_PROMPT).toContain("ترجمه‌ای تحت‌اللفظی");
-    expect(PERSIAN_EDITORIAL_SYSTEM_PROMPT).toContain("عنوان‌های بخش، ایموجی‌های ساختاری، لینک و امضای کانال را ننویسید");
-    expect(PERSIAN_EDITORIAL_SYSTEM_PROMPT).toContain("هیچ واقعیت تأییدنشده‌ای نسازید");
-    expect(PERSIAN_EDITORIAL_SYSTEM_PROMPT).toContain("محاوره‌ایِ حرفه‌ای");
+    expect(PERSIAN_EDITORIAL_PROMPT).toContain("ترجمه‌ای تحت‌اللفظی");
+    expect(PERSIAN_EDITORIAL_PROMPT).toContain("عنوان‌های بخش، ایموجی‌های ساختاری، لینک و امضای کانال را ننویسید");
+    expect(PERSIAN_EDITORIAL_PROMPT).toContain("هیچ واقعیت تأییدنشده‌ای نسازید");
+    expect(PERSIAN_EDITORIAL_PROMPT).toContain("محاوره‌ایِ حرفه‌ای");
   });
 
   it("normalizes an edited draft with the required channel signature and safe title", () => {
@@ -148,13 +140,6 @@ describe("publisher utilities", () => {
     expect(parseManagedCallbackData(callback!, 87_401)).toBeNull();
     if (previous === undefined) delete process.env.TELEGRAM_WEBHOOK_SECRET;
     else process.env.TELEGRAM_WEBHOOK_SECRET = previous;
-  });
-
-  it("keeps review drafts out of the published-history filter", () => {
-    expect(isPublishedHistoryStatus("delivered")).toBe(true);
-    expect(isPublishedHistoryStatus("draft")).toBe(false);
-    expect(isPublishedHistoryStatus("held")).toBe(false);
-    expect(isPublishedHistoryStatus("discarded")).toBe(false);
   });
 
   it("renders the concise channel-style summary, source line, divider, and signature", () => {

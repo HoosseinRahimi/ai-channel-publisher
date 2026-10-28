@@ -91,6 +91,7 @@ export const publisherPosts = mysqlTable(
     content: text("content").notNull(),
     sourceName: varchar("sourceName", { length: 160 }).notNull(),
     sourceUrl: varchar("sourceUrl", { length: 2048 }),
+    imageUrl: varchar("imageUrl", { length: 2048 }),
     sourceUrlHash: varchar("sourceUrlHash", { length: 64 }),
     normalizedTopic: varchar("normalizedTopic", { length: 512 }).notNull(),
     contentFingerprint: varchar("contentFingerprint", { length: 64 }).notNull(),
@@ -110,6 +111,7 @@ export const publisherPosts = mysqlTable(
     reviewIdx: index("publisher_posts_review_idx").on(table.deliveryStatus, table.scheduledFor),
     topicIdx: index("publisher_posts_topic_idx").on(table.normalizedTopic),
     sourceHashIdx: index("publisher_posts_source_hash_idx").on(table.sourceUrlHash),
+    messageIdIdx: index("publisher_posts_message_id_idx").on(table.telegramMessageId),
   })
 );
 

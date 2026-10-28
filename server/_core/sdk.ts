@@ -10,6 +10,9 @@ import { ENV } from "./env";
 const isNonEmptyString = (value: unknown): value is string =>
   typeof value === "string" && value.length > 0;
 
+/** Session touches are throttled: a write on every authenticated request is pure DB churn. */
+const SESSION_TOUCH_INTERVAL_MS = 15 * 60 * 1000;
+
 export type SessionPayload = { openId: string; appId: string; name: string };
 
 class SDKServer {
@@ -51,7 +54,10 @@ class SDKServer {
     if (!session || session.appId !== ENV.appId) throw ForbiddenError("Invalid session cookie");
     const user = await db.getUserByOpenId(session.openId);
     if (!user) throw ForbiddenError("User not found");
-    await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+    const lastSignedIn = user.lastSignedIn ? new Date(user.lastSignedIn).getTime() : 0;
+    if (!lastSignedIn || Date.now() - lastSignedIn > SESSION_TOUCH_INTERVAL_MS) {
+      await db.upsertUser({ openId: user.openId, lastSignedIn: new Date() });
+    }
     return user;
   }
 }

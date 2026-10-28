@@ -269,7 +269,17 @@ client/                 React dashboard
 
 server/                 active Express/tRPC backend
   _core/                auth, env, LLM client, scheduler, health, crypto
-  publisher/            pipeline, editorial rules, languages, Telegram, analytics
+  publisher/            publisher domain modules
+    pipeline.ts         source fetching, draft generation, delivery state machine
+    settings.ts         settings row, schedules, LLM configuration
+    sources.ts          monitored source CRUD
+    reporting.ts        dashboard, analytics, weekly reports, low-engagement alerts
+    webhook.ts          Telegram updates, reaction tracking, recipient linking
+    editorial.ts        prompts, normalization, scheduling rules
+    analytics.ts        pure aggregation helpers
+    telegram.ts         Bot API client
+    languages.ts        output language prompts and detection
+    index.ts            public façade re-exported to routers and tests
   routers.ts            application API routes
 
 drizzle/                MySQL schema and migrations
