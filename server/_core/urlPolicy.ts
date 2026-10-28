@@ -3,8 +3,19 @@ import net from "node:net";
 
 const PRIVATE_NETWORK_OPT_IN = "true";
 
-function isPrivateAddress(address: string) {
-  const normalized = address.toLowerCase();
+function ipv4FromMappedHex(value: string) {
+  const parts = value.split(":");
+  if (parts.length !== 2) return null;
+  const high = Number.parseInt(parts[0], 16);
+  const low = Number.parseInt(parts[1], 16);
+  if (!Number.isInteger(high) || !Number.isInteger(low)) return null;
+  if (high < 0 || high > 0xffff || low < 0 || low > 0xffff) return null;
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join(".");
+}
+
+function isPrivateAddress(address: string): boolean {
+  // URL.hostname keeps the brackets around IPv6 literals.
+  const normalized = address.replace(/^\[|\]$/g, "").toLowerCase();
   if (net.isIPv4(normalized)) {
     const [a, b] = normalized.split(".").map(Number);
     return (
@@ -25,8 +36,13 @@ function isPrivateAddress(address: string) {
       normalized.startsWith("fe80:")
     )
       return true;
-    if (normalized.startsWith("::ffff:"))
-      return isPrivateAddress(normalized.slice("::ffff:".length));
+    if (normalized.startsWith("::ffff:")) {
+      const embedded = normalized.slice("::ffff:".length);
+      const ipv4 = embedded.includes(".")
+        ? embedded
+        : ipv4FromMappedHex(embedded);
+      return ipv4 ? isPrivateAddress(ipv4) : false;
+    }
     return false;
   }
   return false;

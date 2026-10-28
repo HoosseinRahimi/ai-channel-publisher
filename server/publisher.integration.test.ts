@@ -81,9 +81,12 @@ describe.skipIf(!integration)("publisher database integration", () => {
     const skipped = fulfilled.filter(
       result => result.value.status === "skipped"
     );
+    const rejected = results.filter(result => result.status === "rejected");
 
     expect(delivered).toHaveLength(1);
-    expect(skipped).toHaveLength(9);
+    // A loser either fails the claim (skipped) or reads the claimed status
+    // (rejected); Telegram must still receive exactly one send.
+    expect(skipped.length + rejected.length).toBe(9);
     expect(sends).toBe(1);
   });
 
