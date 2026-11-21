@@ -1,29 +1,31 @@
 ---
 name: Bug report
-about: Create a report to help us improve AI Channel Publisher
-title: '[BUG] '
+about: Report a reproducible defect
+title: "fix: "
 labels: bug
-assignees: ''
+assignees: ""
 ---
 
-**Describe the bug**
-A clear and concise description of what the bug is.
+## Summary
 
-**To Reproduce**
-Steps to reproduce the behavior:
-1. Go to '...'
-2. Click on '....'
-3. Scroll down to '....'
-4. See error
+A clear description of what went wrong.
 
-**Expected behavior**
-A clear and concise description of what you expected to happen.
+## Steps to reproduce
 
-**Environment:**
- - OS: [e.g. Ubuntu 24.04]
- - Deployment: [e.g. Docker Compose, Bare-metal, Cloudflare]
- - Model Provider: [e.g. OpenAI, OpenRouter, Ollama, Groq]
- - Node.js version: [e.g. 22.x]
+1.
+2.
+3.
 
-**Additional context**
-Add any other context or logs about the problem here.
+## Expected vs actual
+
+- **Expected:**
+- **Actual:**
+
+## Environment
+
+- OS / Python / Node version:
+- Commit or release:
+
+## Logs or screenshots
+
+Include the smallest reproducible log excerpt. Redact secrets and personal data.
